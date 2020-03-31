@@ -56,24 +56,6 @@ const (
 	DOOR_OPEN           = 2
 )
 
-type Acknowledgement int
-
-const (
-	OrderDone = -1
-	NotAck      = 0
-	Ack         = 1
-)
-
-type AcknowledgeMsg struct {
-	ChosenElevator int
-	AckStatus       [NumElevators]Acknowledgement
-}
-
-type Message struct {
-	ElevList  [NumElevators]Elev
-	AckMatrix [NumFloors][NumButtonTypes - 1]AcknowledgeMsg
-	ID        int
-}
 
 type Order struct {
 	Complete bool
@@ -81,3 +63,10 @@ type Order struct {
 	Floor    int
 	ID       int
 }
+
+type Message struct {
+	ElevList  [NumElevators]Elev
+	NewOrder  Order
+	ID        int
+}
+

@@ -53,7 +53,7 @@ func main() {
 	reassignChannel := make(chan int)
 
 	//Light channel
-	UpdateLightsChannel := make(chan [NumElevators]Elev)
+	UpdateLightsChannel := make(chan Elev)
 
 	//sync-network channels
 	PeerUpdateChannel := make(chan peers.PeerUpdate)

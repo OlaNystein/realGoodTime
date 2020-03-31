@@ -183,12 +183,12 @@ func FsmRoutine(sensorChannel <-chan int, orderToFsmChannel <-chan Elev, fsmUpda
 			finishedOrder.Floor = elevator.Floor
 
 			for i := ButtonType(0); i < 3; i++ {
-				//elevio.SetButtonLamp(ButtonType(i), elevator.Floor, false)
-				//elevator.Queue[elevator.Floor][i] = false
+				// elevio.SetButtonLamp(ButtonType(i), elevator.Floor, false)
+				// elevator.Queue[elevator.Floor][i] = false
 			}
 
-			FSMCompleteOrderChannel <- finishedOrder
-			fsmUpdateChannel <- elevator
+			go func(){FSMCompleteOrderChannel <- finishedOrder}()
+			go func(){fsmUpdateChannel <- elevator}()
 
 			<-doorTimer.C
 			elevio.SetDoorOpenLamp(false)
@@ -207,7 +207,7 @@ func FsmRoutine(sensorChannel <-chan int, orderToFsmChannel <-chan Elev, fsmUpda
 		if update && lastElevator != elevator {
 			println("UPDATING CONTROL")
 			update = false
-			fsmUpdateChannel <- elevator
+			go func(){fsmUpdateChannel <- elevator}()
 			println("CONTROL UPDATED!")
 		}
 

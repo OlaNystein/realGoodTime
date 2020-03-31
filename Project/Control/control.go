@@ -137,16 +137,15 @@ func calculateCost(myID int, elevList [NumElevators]Elev, newOrder ButtonEvent, 
 
 //A routine to handle the order lamps. Ignores cab-lights
 //CHECK THIS LATER! SHOULD WORK OK, BUT HAVE TO SEE IN LIGHT OF FSMUPDATECHANNEL
-func SetOrderLightsRoutine(updateLightChannel <-chan [NumElevators]Elev) {
+func SetOrderLightsRoutine(updateLightChannel <-chan Elev) {
 	for {
 		select {
-		case tempList := <-updateLightChannel:
-			elevList := tempList
+		case myelev := <-updateLightChannel:
 			for btn := ButtonType(0); btn < (3); btn++ { //Used 3 instead of NumButtonTypes as it yields an error
 				for floor := 0; floor < NumFloors; floor++ {
 					isThereAnOrderHere := false
 					for elev := 0; elev < NumElevators; elev++ {
-						if !isThereAnOrderHere && (elevList[elev].Queue[floor][btn]) {
+						if !isThereAnOrderHere && myelev.Queue[floor][btn] {
 							isThereAnOrderHere = true
 							elevio.SetButtonLamp(btn, floor, true)
 						}
@@ -164,7 +163,7 @@ func SetOrderLightsRoutine(updateLightChannel <-chan [NumElevators]Elev) {
 func ControlRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 	SyncToControlChannel <-chan [NumElevators]Elev,
 	OrderToFSMChannel chan<- Elev, newOrderChannel <-chan ButtonEvent,
-	fsmUpdateChannel <-chan Elev, updateLightChannel chan<- [NumElevators]Elev,
+	fsmUpdateChannel <-chan Elev, updateLightChannel chan<- Elev,
 	OnlineElevChannel <-chan [NumElevators]bool, FSMCompleteOrderChannel <-chan Order,
 	SyncOrderChannel chan<- Order, reassignChannel <-chan int) {
 
@@ -188,79 +187,48 @@ func ControlRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 			//Control receieves a new order from the hardware
 		case newOrder := <-newOrderChannel:
 			println("\nRecieved new order for button ", newOrder.Button, " at floor ", newOrder.Floor)
-			if online {
-				if (newOrder.Floor == elevatorList[myID].Floor && elevatorList[myID].State != RUNNING) {
-
-					elevatorList[myID].Queue[newOrder.Floor][newOrder.Button] = true
-					elevio.SetButtonLamp(newOrder.Button, newOrder.Floor, true)
-					println("Sending the order to FSM without bcasting")
-					go func() { OrderToFSMChannel <- elevatorList[myID] }()
-					println("Order sent to FSM withour bcasting")
-
-				} else if !orderAlreadyRecorded(elevatorList, newOrder) {
-
-					optElev := calculateCost(myID, elevatorList, newOrder, onlineElevators)
-					//optElev := controlCostFunction(elevatorList, onlineElevators)
-					println("The optimal elevator for this order is: ", optElev)
-					order.ID = optElev
-					order.Floor = newOrder.Floor
-					order.Button = newOrder.Button
-
-					go func() { SyncOrderChannel <- order }()
-					println("Order sent to synchronise from control for bcasting")
-				}
-
-			} else {
-				if !orderAlreadyRecorded(elevatorList, newOrder) && newOrder.Button == BT_Cab {
-					//not accepting orders outside the elevator if we're not online
-					println("I'm not online")
-					elevatorList[myID].Queue[newOrder.Floor][newOrder.Button] = true
-					elevio.SetButtonLamp(newOrder.Button, newOrder.Floor, true)
-					go func() { OrderToFSMChannel <- elevatorList[myID] }()
-				}
+		
+			if !orderAlreadyRecorded(elevatorList, newOrder){
+				optElev := calculateCost(myID, elevatorList, newOrder, onlineElevators)
+				order.ID = optElev
+				order.Floor = newOrder.Floor
+				order.Button = newOrder.Button
+				order.Complete = false
+				go func(){SyncOrderChannel <- order}()
 			}
 
 		//Control recieves an updated elevatorlist from the Syncronizer
 		case tempElevList := <-SyncToControlChannel:
 			
-			
 			for elev := 0; elev < NumElevators; elev++ {
-				if elev == myID {
-					continue
+				if elev != myID {
+					elevatorList[elev] = tempElevList[elev]
 				}
-				elevatorList[elev] = tempElevList[elev]
+				elevatorList[elev].Queue = tempElevList[elev].Queue
 			}
 
-			for floor := 0; floor < NumFloors; floor++ {
-				for button := 0; button < NumButtonTypes; button++ {
-					 if !elevatorList[myID].Queue[floor][button] && tempElevList[myID].Queue[floor][button]{
-						 println("setting order to fsm")
-						 elevatorList[myID].Queue[floor][button] = true
-					 } else if elevatorList[myID].Queue[floor][button] && !tempElevList[myID].Queue[floor][button]{
-						 println("clearing order to fsm")
-						elevatorList[myID].Queue[floor][button] = false
-					}
-				}
-			}
-			updateLightChannel <- elevatorList
 
-			go func() { OrderToFSMChannel <- elevatorList[myID]
-				println("order sent to fsm") }()
+			go func(){updateLightChannel <- elevatorList[myID]}()
+
+			go func() { OrderToFSMChannel <- elevatorList[myID]}()
 
 		//Control recieves an update from the local fsm
 		case updatedElevator := <-fsmUpdateChannel:
+
 			tempQ := elevatorList[myID].Queue //preserve the queue
 			elevatorList[myID] = updatedElevator
 			elevatorList[myID].Queue = tempQ
 			if online {
-				ControlToSyncChannel <- elevatorList
+				go func() {ControlToSyncChannel <- elevatorList}()
 			}
 
+
 		case finished := <-FSMCompleteOrderChannel:
-			if online {
+
+			if online || true {
 				finished.ID = myID
 				finished.Complete = true
-				SyncOrderChannel <- finished
+				go func(){ SyncOrderChannel <- finished } ()
 			} else {
 				for i := ButtonType(0); i < 3; i++ {
 					elevatorList[myID].Queue[finished.Floor][i] = false
@@ -286,7 +254,7 @@ func ControlRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 
 				}
 			}
-			ControlToSyncChannel <- elevatorList
+			go func(){ControlToSyncChannel <- elevatorList}()
 		}
 	}
 }
