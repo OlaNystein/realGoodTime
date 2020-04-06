@@ -135,17 +135,19 @@ func calculateCost(myID int, elevList [NumElevators]Elev, newOrder ButtonEvent, 
 // 	return theChosenOne
 // }
 
-//A routine to handle the order lamps. Ignores cab-lights
-//CHECK THIS LATER! SHOULD WORK OK, BUT HAVE TO SEE IN LIGHT OF FSMUPDATECHANNEL
-func SetOrderLightsRoutine(updateLightChannel <-chan Elev) {
+func SetOrderLightsRoutine(updateLightChannel <-chan [NumElevators]Elev, myID int) {
 	for {
 		select {
-		case myelev := <-updateLightChannel:
-			for btn := ButtonType(0); btn < (3); btn++ { //Used 3 instead of NumButtonTypes as it yields an error
+		case elevList := <-updateLightChannel:
+			for btn := ButtonType(0); btn < (3); btn++ {
 				for floor := 0; floor < NumFloors; floor++ {
 					isThereAnOrderHere := false
 					for elev := 0; elev < NumElevators; elev++ {
-						if !isThereAnOrderHere && myelev.Queue[floor][btn] {
+						if elev == myID && btn == BT_Cab && elevList[elev].Queue[floor][btn] {
+							isThereAnOrderHere = true
+							elevio.SetButtonLamp(btn, floor, true)
+							continue
+						} else if btn != BT_Cab && !isThereAnOrderHere && elevList[elev].Queue[floor][btn] {
 							isThereAnOrderHere = true
 							elevio.SetButtonLamp(btn, floor, true)
 						}
@@ -163,7 +165,7 @@ func SetOrderLightsRoutine(updateLightChannel <-chan Elev) {
 func ControlRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 	SyncToControlChannel <-chan [NumElevators]Elev,
 	OrderToFSMChannel chan<- Elev, newOrderChannel <-chan ButtonEvent,
-	fsmUpdateChannel <-chan Elev, updateLightChannel chan<- Elev,
+	fsmUpdateChannel <-chan Elev, updateLightChannel chan<- [NumElevators]Elev,
 	OnlineElevChannel <-chan [NumElevators]bool, FSMCompleteOrderChannel <-chan Order,
 	SyncOrderChannel chan<- Order, reassignChannel <-chan int) {
 
@@ -177,29 +179,40 @@ func ControlRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 
 	elevatorList[myID] = <-fsmUpdateChannel
 	online = onlineElevators[myID]
+
+	//Subroutine to update online elevators
+	go func() {
+		for {
+			select {
+			case OnlineListUpdate := <-OnlineElevChannel:
+				println("ONLINE ELEVATORS UPDATED!")
+				onlineElevators = OnlineListUpdate
+				online = onlineElevators[myID]
+			}
+		}
+	}()
+
 	for {
 		select {
-		//Control recieved an update to the current online elevators
-		case OnlineListUpdate := <-OnlineElevChannel:
-			onlineElevators = OnlineListUpdate
-			online = onlineElevators[myID]
-
-			//Control receieves a new order from the hardware
+		//Control receieves a new order from the hardware
 		case newOrder := <-newOrderChannel:
 			println("\nRecieved new order for button ", newOrder.Button, " at floor ", newOrder.Floor)
-		
-			if !orderAlreadyRecorded(elevatorList, newOrder){
+
+			if online && !orderAlreadyRecorded(elevatorList, newOrder) {
 				optElev := calculateCost(myID, elevatorList, newOrder, onlineElevators)
 				order.ID = optElev
 				order.Floor = newOrder.Floor
 				order.Button = newOrder.Button
 				order.Complete = false
-				go func(){SyncOrderChannel <- order}()
+				go func() { SyncOrderChannel <- order }()
+			} else if !online {
+
 			}
 
 		//Control recieves an updated elevatorlist from the Syncronizer
 		case tempElevList := <-SyncToControlChannel:
-			
+			println("Got an update from sync")
+
 			for elev := 0; elev < NumElevators; elev++ {
 				if elev != myID {
 					elevatorList[elev] = tempElevList[elev]
@@ -207,10 +220,9 @@ func ControlRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 				elevatorList[elev].Queue = tempElevList[elev].Queue
 			}
 
+			go func() { updateLightChannel <- elevatorList }()
 
-			go func(){updateLightChannel <- elevatorList[myID]}()
-
-			go func() { OrderToFSMChannel <- elevatorList[myID]}()
+			go func() { OrderToFSMChannel <- elevatorList[myID] }()
 
 		//Control recieves an update from the local fsm
 		case updatedElevator := <-fsmUpdateChannel:
@@ -219,33 +231,42 @@ func ControlRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 			elevatorList[myID] = updatedElevator
 			elevatorList[myID].Queue = tempQ
 			if online {
-				go func() {ControlToSyncChannel <- elevatorList}()
+				go func() { ControlToSyncChannel <- elevatorList }()
 			}
-
 
 		case finished := <-FSMCompleteOrderChannel:
 
 			if online || true {
 				finished.ID = myID
 				finished.Complete = true
-				go func(){ SyncOrderChannel <- finished } ()
+				go func() { SyncOrderChannel <- finished }()
 			} else {
 				for i := ButtonType(0); i < 3; i++ {
 					elevatorList[myID].Queue[finished.Floor][i] = false
 				}
 			}
 		case lostID := <-reassignChannel:
+			println("Am I online?: ", online)
 			if online {
+				println("\nREASSIGNING ORDERS FOR ELEVATOR: ", lostID)
+				printLocalOrders(elevatorList, 0)
+				println(onlineElevators[0], " ", onlineElevators[1], " ", onlineElevators[2])
 				for btn := ButtonType(0); btn < 3; btn++ {
 					for floor := 0; floor < NumFloors; floor++ {
 						if elevatorList[lostID].Queue[floor][btn] {
+							println("FOUND AN ORDER!")
 							var disconnectedOrder ButtonEvent
 							disconnectedOrder.Floor = floor
 							disconnectedOrder.Button = btn
-
 							optElev := calculateCost(myID, elevatorList, disconnectedOrder, onlineElevators)
-							elevatorList[lostID].Queue[floor][btn] = false
-							elevatorList[optElev].Queue[floor][btn] = true
+
+							deleteOrder := Order{Complete: true, Button: btn, Floor: floor, ID: lostID}
+							go func() { SyncOrderChannel <- deleteOrder }()
+
+							reassignedOrder := Order{Complete: false, Button: btn, Floor: floor, ID: optElev}
+							go func() { SyncOrderChannel <- reassignedOrder }()
+							//elevatorList[lostID].Queue[floor][btn] = false
+							//elevatorList[optElev].Queue[floor][btn] = true
 
 							println("\nSWAPPED ", btn, " AT FLOOR ", floor, " FROM ", lostID, " TO ", optElev)
 
@@ -254,7 +275,6 @@ func ControlRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 
 				}
 			}
-			go func(){ControlToSyncChannel <- elevatorList}()
 		}
 	}
 }

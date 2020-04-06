@@ -109,12 +109,10 @@ func FsmRoutine(sensorChannel <-chan int, orderToFsmChannel <-chan Elev, fsmUpda
 	)
 
 	doorTimer := time.NewTimer(3 * time.Second)
-	printTicker := time.NewTicker(2*time.Second)
+	printTicker := time.NewTicker(2 * time.Second)
 	//Remember to add a try/catch here later on
 	elevator = fsmInit(sensorChannel, elevator)
 	fsmUpdateChannel <- elevator
-
-	
 
 	go func() {
 		for {
@@ -123,8 +121,8 @@ func FsmRoutine(sensorChannel <-chan int, orderToFsmChannel <-chan Elev, fsmUpda
 				lastElevator = elevator
 				elevator.Queue = tempElev.Queue
 				println("fsm queue has updated")
-			case <- printTicker.C:
-				printLocalOrders(elevator)
+			case <-printTicker.C:
+				//printLocalOrders(elevator)
 			}
 		}
 	}()
@@ -153,7 +151,7 @@ func FsmRoutine(sensorChannel <-chan int, orderToFsmChannel <-chan Elev, fsmUpda
 				elevator.State = DOOR_OPEN
 				update = true
 			}
-			
+
 			break
 
 		case RUNNING:
@@ -187,8 +185,8 @@ func FsmRoutine(sensorChannel <-chan int, orderToFsmChannel <-chan Elev, fsmUpda
 				// elevator.Queue[elevator.Floor][i] = false
 			}
 
-			go func(){FSMCompleteOrderChannel <- finishedOrder}()
-			go func(){fsmUpdateChannel <- elevator}()
+			go func() { FSMCompleteOrderChannel <- finishedOrder }()
+			go func() { fsmUpdateChannel <- elevator }()
 
 			<-doorTimer.C
 			elevio.SetDoorOpenLamp(false)
@@ -207,7 +205,7 @@ func FsmRoutine(sensorChannel <-chan int, orderToFsmChannel <-chan Elev, fsmUpda
 		if update && lastElevator != elevator {
 			println("UPDATING CONTROL")
 			update = false
-			go func(){fsmUpdateChannel <- elevator}()
+			go func() { fsmUpdateChannel <- elevator }()
 			println("CONTROL UPDATED!")
 		}
 

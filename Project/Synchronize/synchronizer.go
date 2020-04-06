@@ -90,6 +90,8 @@ func SynchronizerRoutine(myID int, PeerUpdateChannel <-chan peers.PeerUpdate,
 			}
 		}
 		select {
+
+		//Records update to local elevator
 		case ctrlUpdate := <-ControlToSyncChannel:
 
 			tempQ := elevatorList[myID].Queue
@@ -97,11 +99,11 @@ func SynchronizerRoutine(myID int, PeerUpdateChannel <-chan peers.PeerUpdate,
 			elevatorList[myID].Queue = tempQ
 			update = true
 
+		//Distributes an order recorded in control
 		case order := <-SyncOrderChannel:
-			println("hello")
-			if order.ID == myID{
+			if order.ID == myID {
 				if order.Complete {
-					for btn := 0; btn < 3; btn++{
+					for btn := 0; btn < 3; btn++ {
 						elevatorList[myID].Queue[order.Floor][btn] = false
 					}
 					println("local order completed")
@@ -109,7 +111,6 @@ func SynchronizerRoutine(myID int, PeerUpdateChannel <-chan peers.PeerUpdate,
 					elevatorList[myID].Queue[order.Floor][order.Button] = true
 					println("local order added")
 				}
-				go func() {SyncToControlChannel <- elevatorList}()
 			} else {
 				if onlineElevators[order.ID] {
 					outgoingPackage.NewOrder = order
@@ -118,32 +119,34 @@ func SynchronizerRoutine(myID int, PeerUpdateChannel <-chan peers.PeerUpdate,
 			outgoingPackage.NewOrder = order
 			outgoingPackage.ID = myID
 			outgoingPackage.ElevList = elevatorList
-			go func() {for i:= 0; i < 3; i++{
-				OutgoingMessageChannel <- outgoingPackage}
-			 }()
-			
+			go func() {
+				for i := 0; i < 3; i++ {
+					OutgoingMessageChannel <- outgoingPackage
+				}
+			}()
+			go func() { SyncToControlChannel <- elevatorList }()
 
+		//Recieves an update from one of the other elevators
 		case msg := <-IncomingMessageChannel:
 
-		
 			if msg.ElevList != elevatorList {
+				println("\nUPDATED ELEVATORLIST")
 				tempElevator := elevatorList[myID]
 				elevatorList = msg.ElevList
 				elevatorList[myID] = tempElevator
 				update = true
 			}
-			if msg.NewOrder.ID == myID && msg.ID != myID{
+			if msg.NewOrder.ID == myID && msg.ID != myID {
+				println("UPDATED ORDER AT SELF")
 				elevatorList[myID].Queue[msg.NewOrder.Floor][msg.NewOrder.Button] = true
 				update = true
 			}
-			
-
-			if update {
-				println("Updating from sync to control")
-				update = false
-				go func(){SyncToControlChannel <- elevatorList}()
-				println("Control updated from sync")
-			}
+		}
+		if update {
+			println("Updating from sync to control")
+			update = false
+			go func() { SyncToControlChannel <- elevatorList }()
+			println("Control updated from sync")
 		}
 	}
 }

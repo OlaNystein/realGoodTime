@@ -53,7 +53,7 @@ func main() {
 	reassignChannel := make(chan int)
 
 	//Light channel
-	UpdateLightsChannel := make(chan Elev)
+	UpdateLightsChannel := make(chan [NumElevators]Elev)
 
 	//sync-network channels
 	PeerUpdateChannel := make(chan peers.PeerUpdate)
@@ -69,7 +69,7 @@ func main() {
 	go elevio.PollFloorSensor(sensorChannel)
 
 	go fsm.FsmRoutine(sensorChannel, OrderToFSMChannel, fsmUpdateChannel, fsmOrderCompleteChannel)
-	go control.SetOrderLightsRoutine(UpdateLightsChannel)
+	go control.SetOrderLightsRoutine(UpdateLightsChannel, intID)
 	go control.ControlRoutine(intID, ControlToSyncChannel, SyncToControlChannel, OrderToFSMChannel, newOrderChannel, fsmUpdateChannel, UpdateLightsChannel, OnlineElevChannel, fsmOrderCompleteChannel, syncOrderCompleteChannel, reassignChannel)
 	go synchronize.SynchronizerRoutine(intID, PeerUpdateChannel, PeerTxEnable, ControlToSyncChannel, SyncToControlChannel, InMsg, OutMsg, OnlineElevChannel, syncOrderCompleteChannel)
 
