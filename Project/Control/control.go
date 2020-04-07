@@ -193,7 +193,6 @@ func ControlRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 	}()
 
 	for {
-		online = false
 		select {
 		//Control receieves a new order from the hardware
 		case newOrder := <-newOrderChannel:
