@@ -193,6 +193,7 @@ func ControlRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 	}()
 
 	for {
+		online = false
 		select {
 		//Control receieves a new order from the hardware
 		case newOrder := <-newOrderChannel:
@@ -205,24 +206,34 @@ func ControlRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 				order.Button = newOrder.Button
 				order.Complete = false
 				go func() { SyncOrderChannel <- order }()
-			} else if !online {
-
+			} else if !online && !orderAlreadyRecorded(elevatorList, newOrder) {
+				if newOrder.Button == BT_Cab {
+					println("\nCaborder registered for offline elevator")
+					elevatorList[myID].Queue[newOrder.Floor][newOrder.Button] = true
+					go func() { updateLightChannel <- elevatorList }()
+					go func() { OrderToFSMChannel <- elevatorList[myID] }()
+				} else {
+					println("\nCannot accept hall-orders, elevator offline")
+					continue
+					//Don't accept hall orders if offline
+				}
 			}
 
 		//Control recieves an updated elevatorlist from the Syncronizer
 		case tempElevList := <-SyncToControlChannel:
-			println("Got an update from sync")
-
-			for elev := 0; elev < NumElevators; elev++ {
-				if elev != myID {
-					elevatorList[elev] = tempElevList[elev]
+			if online {
+				for elev := 0; elev < NumElevators; elev++ {
+					if elev != myID {
+						elevatorList[elev] = tempElevList[elev]
+					}
+					elevatorList[elev].Queue = tempElevList[elev].Queue
 				}
-				elevatorList[elev].Queue = tempElevList[elev].Queue
+
+				go func() { updateLightChannel <- elevatorList }()
+
+				go func() { OrderToFSMChannel <- elevatorList[myID] }()
+
 			}
-
-			go func() { updateLightChannel <- elevatorList }()
-
-			go func() { OrderToFSMChannel <- elevatorList[myID] }()
 
 		//Control recieves an update from the local fsm
 		case updatedElevator := <-fsmUpdateChannel:
@@ -235,15 +246,18 @@ func ControlRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 			}
 
 		case finished := <-FSMCompleteOrderChannel:
-
-			if online || true {
+			println("\nOrder Finished!")
+			if online {
 				finished.ID = myID
 				finished.Complete = true
 				go func() { SyncOrderChannel <- finished }()
 			} else {
+				println("Deleting order")
 				for i := ButtonType(0); i < 3; i++ {
 					elevatorList[myID].Queue[finished.Floor][i] = false
 				}
+				go func() { OrderToFSMChannel <- elevatorList[myID] }()
+				go func() { updateLightChannel <- elevatorList }()
 			}
 		case lostID := <-reassignChannel:
 			println("Am I online?: ", online)
