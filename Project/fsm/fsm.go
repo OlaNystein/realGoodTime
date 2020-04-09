@@ -108,7 +108,7 @@ func FsmRoutine(sensorChannel <-chan int, orderToFsmChannel <-chan Elev, fsmUpda
 		update       bool
 	)
 
-	doorTimer := time.NewTimer(3 * time.Second)
+	// doorTimer := time.NewTimer(3 * time.Second)
 	printTicker := time.NewTicker(2 * time.Second)
 	//Remember to add a try/catch here later on
 	elevator = fsmInit(sensorChannel, elevator)
@@ -136,10 +136,8 @@ func FsmRoutine(sensorChannel <-chan int, orderToFsmChannel <-chan Elev, fsmUpda
 				elevator.Dir = MD_Stop
 			}
 
-			if fsmOrdersAbove(elevator) {
-				elevator.State = RUNNING
-				elevator.Dir = MD_Up
-				println("There are orders above")
+			if fsmOrdersAtMe(elevator) {
+				elevator.State = DOOR_OPEN
 				update = true
 			} else if fsmOrdersBelow(elevator) {
 				elevator.State = RUNNING
@@ -147,8 +145,10 @@ func FsmRoutine(sensorChannel <-chan int, orderToFsmChannel <-chan Elev, fsmUpda
 				println("There are orders below")
 
 				update = true
-			} else if fsmOrdersAtMe(elevator) {
-				elevator.State = DOOR_OPEN
+			} else if fsmOrdersAbove(elevator) {
+				elevator.State = RUNNING
+				elevator.Dir = MD_Up
+				println("There are orders above")
 				update = true
 			}
 
@@ -174,24 +174,21 @@ func FsmRoutine(sensorChannel <-chan int, orderToFsmChannel <-chan Elev, fsmUpda
 		case DOOR_OPEN:
 			// println("I am in DOOR OPEN")
 			elevio.SetMotorDirection(MD_Stop)
-			doorTimer.Reset(3 * time.Second)
+
+			doorTimer := time.NewTimer(3 * time.Second)
 			elevio.SetDoorOpenLamp(true)
 
 			var finishedOrder Order
 			finishedOrder.Floor = elevator.Floor
-
-			for i := ButtonType(0); i < 3; i++ {
-				// elevio.SetButtonLamp(ButtonType(i), elevator.Floor, false)
-				// elevator.Queue[elevator.Floor][i] = false
-			}
 
 			go func() { FSMCompleteOrderChannel <- finishedOrder }()
 			go func() { fsmUpdateChannel <- elevator }()
 
 			<-doorTimer.C
 			elevio.SetDoorOpenLamp(false)
-
-			if FsmShouldIContinue(elevator) {
+			if fsmOrdersAtMe(elevator) {
+				//Stay in the same state
+			} else if FsmShouldIContinue(elevator) {
 				elevator.State = RUNNING
 
 			} else {

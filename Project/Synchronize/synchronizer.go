@@ -27,9 +27,8 @@ func ConnectedElevatorsRoutine(PeerUpdateChannel <-chan peers.PeerUpdate, Online
 				//TimeOut = true
 
 			} else if p.New != "" { //new elevator connected
-				println("WE GOT A NEW ONE!")
-
 				newPeerID, _ := strconv.Atoi(p.New)
+				println(newPeerID, "Just connected!")
 				onlineElevators[newPeerID] = true
 
 			} else if len(p.Lost) > 0 { // lost boys
@@ -37,11 +36,9 @@ func ConnectedElevatorsRoutine(PeerUpdateChannel <-chan peers.PeerUpdate, Online
 				for lostPeer := 0; lostPeer < len(p.Lost); lostPeer++ {
 					lostPeerID, _ := strconv.Atoi(p.Lost[lostPeer])
 					onlineElevators[lostPeerID] = false
-					println(onlineElevators[0], " ", onlineElevators[1], " ", onlineElevators[2])
 					reassignChannel <- lostPeerID
 				}
 			}
-			println(onlineElevators[0], " ", onlineElevators[1], " ", onlineElevators[2])
 			OnlineElevChannel <- onlineElevators
 		}
 	}
@@ -85,7 +82,7 @@ func SynchronizerRoutine(myID int, PeerUpdateChannel <-chan peers.PeerUpdate,
 	for {
 		if timeOut {
 			if onlineElevators[myID] {
-				onlineElevators[myID] = false
+				//onlineElevators[myID] = false
 
 			}
 		}
@@ -113,7 +110,9 @@ func SynchronizerRoutine(myID int, PeerUpdateChannel <-chan peers.PeerUpdate,
 				}
 			} else {
 				if onlineElevators[order.ID] {
-					outgoingPackage.NewOrder = order
+					elevatorList[order.ID].Queue[order.Floor][order.Button] = true
+				} else {
+					println("ERROR: Could not assign order ot offline-elevator")
 				}
 			}
 			outgoingPackage.NewOrder = order

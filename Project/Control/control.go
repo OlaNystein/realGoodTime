@@ -186,6 +186,7 @@ func ControlRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 			select {
 			case OnlineListUpdate := <-OnlineElevChannel:
 				println("ONLINE ELEVATORS UPDATED!")
+				println(onlineElevators[0], " ", onlineElevators[1], " ", onlineElevators[2], "\n")
 				onlineElevators = OnlineListUpdate
 				online = onlineElevators[myID]
 			}
