@@ -186,8 +186,8 @@ func ControlRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 			select {
 			case OnlineListUpdate := <-OnlineElevChannel:
 				println("ONLINE ELEVATORS UPDATED!")
-				println(onlineElevators[0], " ", onlineElevators[1], " ", onlineElevators[2], "\n")
 				onlineElevators = OnlineListUpdate
+				println(onlineElevators[0], " ", onlineElevators[1], " ", onlineElevators[2], "\n")
 				online = onlineElevators[myID]
 			}
 		}
@@ -260,10 +260,8 @@ func ControlRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 				go func() { updateLightChannel <- elevatorList }()
 			}
 		case lostID := <-reassignChannel:
-			println("Am I online?: ", online)
 			if online {
 				println("\nREASSIGNING ORDERS FOR ELEVATOR: ", lostID)
-				printLocalOrders(elevatorList, 0)
 				println(onlineElevators[0], " ", onlineElevators[1], " ", onlineElevators[2])
 				for btn := ButtonType(0); btn < 3; btn++ {
 					for floor := 0; floor < NumFloors; floor++ {
@@ -279,8 +277,6 @@ func ControlRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 
 							reassignedOrder := Order{Complete: false, Button: btn, Floor: floor, ID: optElev}
 							go func() { SyncOrderChannel <- reassignedOrder }()
-							//elevatorList[lostID].Queue[floor][btn] = false
-							//elevatorList[optElev].Queue[floor][btn] = true
 
 							println("\nSWAPPED ", btn, " AT FLOOR ", floor, " FROM ", lostID, " TO ", optElev)
 

@@ -120,7 +120,7 @@ func FsmRoutine(sensorChannel <-chan int, orderToFsmChannel <-chan Elev, fsmUpda
 			case tempElev := <-orderToFsmChannel:
 				lastElevator = elevator
 				elevator.Queue = tempElev.Queue
-				println("fsm queue has updated")
+				println("\nLocal FSM recieved elevator-update!")
 			case <-printTicker.C:
 				//printLocalOrders(elevator)
 			}

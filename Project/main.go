@@ -62,8 +62,8 @@ func main() {
 	InMsg := make(chan Message)
 
 	go peers.Transmitter(42035, ID, PeerTxEnable)
-	go peers.Receiver(42035, PeerUpdateChannel)
 	go synchronize.ConnectedElevatorsRoutine(PeerUpdateChannel, OnlineElevChannel, reassignChannel)
+	go peers.Receiver(42035, PeerUpdateChannel)
 
 	go elevio.PollButtons(newOrderChannel)
 	go elevio.PollFloorSensor(sensorChannel)
