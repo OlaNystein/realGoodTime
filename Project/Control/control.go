@@ -35,6 +35,7 @@ func calculateCost(myID int, elevList [NumElevators]Elev, newOrder ButtonEvent, 
 	theChosenOne := myID
 	for elev := 0; elev < NumElevators; elev++ {
 		if !onlineElevators[elev] {
+			println("Elevator ", elev, " is not online")
 			continue
 		}
 		cost := newOrder.Floor - elevList[elev].Floor
@@ -167,7 +168,9 @@ func ControlRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 	OrderToFSMChannel chan<- Elev, newOrderChannel <-chan ButtonEvent,
 	fsmUpdateChannel <-chan Elev, updateLightChannel chan<- [NumElevators]Elev,
 	OnlineElevChannel <-chan [NumElevators]bool, FSMCompleteOrderChannel <-chan Order,
-	SyncOrderChannel chan<- Order, reassignChannel <-chan int) {
+	SyncOrderChannel chan<- Order, reassignChannel <-chan int,
+	OnlineElevChannelControl <-chan [NumElevators]bool,
+	) {
 
 	var (
 		elevatorList    [NumElevators]Elev
@@ -175,17 +178,17 @@ func ControlRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 		online          bool
 		order           Order
 	)
-	onlineElevators = <-OnlineElevChannel
+	// onlineElevators = <-OnlineElevChannel
 
-	elevatorList[myID] = <-fsmUpdateChannel
-	online = onlineElevators[myID]
+	// elevatorList[myID] = <-fsmUpdateChannel
+	// online = onlineElevators[myID]
 
 	//Subroutine to update online elevators
 	go func() {
 		for {
 			select {
-			case OnlineListUpdate := <-OnlineElevChannel:
-				println("ONLINE ELEVATORS UPDATED!")
+			case OnlineListUpdate := <-OnlineElevChannelControl:
+				println("ONLINE ELEVATORS UPDATED IN CONTROL!")
 				onlineElevators = OnlineListUpdate
 				println(onlineElevators[0], " ", onlineElevators[1], " ", onlineElevators[2], "\n")
 				online = onlineElevators[myID]
@@ -209,7 +212,8 @@ func ControlRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 			} else if !online && !orderAlreadyRecorded(elevatorList, newOrder) {
 				if newOrder.Button == BT_Cab {
 					println("\nCaborder registered for offline elevator")
-					elevatorList[myID].Queue[newOrder.Floor][newOrder.Button] = true
+					//elevatorList[myID].Queue[newOrder.Floor][newOrder.Button] = true
+					go func() { SyncOrderChannel <- order }()
 					go func() { updateLightChannel <- elevatorList }()
 					go func() { OrderToFSMChannel <- elevatorList[myID] }()
 				} else {

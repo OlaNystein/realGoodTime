@@ -3,7 +3,7 @@ package synchronize
 import (
 	"fmt"
 	"strconv"
-	"time"
+	//"time"
 
 	// "../network/bcast"
 	"../network/peers"
@@ -27,20 +27,22 @@ func ConnectedElevatorsRoutine(PeerUpdateChannel <-chan peers.PeerUpdate, Online
 			if len(p.Peers) == 0 { //we have timed out
 				//TimeOut = true
 
-			} else if p.New != "" { //new elevator connected
+			} 
+			if p.New != "" { //new elevator connected
 				newPeerID, _ := strconv.Atoi(p.New)
 				println(newPeerID, "Just connected!")
 				onlineElevators[newPeerID] = true
 
-			} else if len(p.Lost) > 0 { // lost boys
+			}
+			if len(p.Lost) > 0 { // lost boys
 				for lostPeer := 0; lostPeer < len(p.Lost); lostPeer++ {
 					lostPeerID, _ := strconv.Atoi(p.Lost[lostPeer])
 					println(lostPeerID, " just disconnected")
 					onlineElevators[lostPeerID] = false
-					reassignChannel <- lostPeerID
+					go func(){reassignChannel <- lostPeerID}()
 				}
 			}
-			OnlineElevChannel <- onlineElevators
+			go func(){OnlineElevChannel <- onlineElevators}()
 		}
 	}
 }
@@ -51,9 +53,8 @@ func SynchronizerRoutine(myID int, PeerUpdateChannel <-chan peers.PeerUpdate,
 	SyncToControlChannel chan<- [NumElevators]Elev,
 	IncomingMessageChannel <-chan Message,
 	OutgoingMessageChannel chan<- Message,
-	//SynchronizeChannel <-chan bool,
-	//ErrorChannel chan bool,
 	OnlineElevChannel <-chan [NumElevators]bool,
+	OnlineElevChannelControl chan<- [NumElevators]bool,
 	SyncOrderChannel <-chan Order) {
 
 	var (
@@ -64,17 +65,17 @@ func SynchronizerRoutine(myID int, PeerUpdateChannel <-chan peers.PeerUpdate,
 		timeOut         bool = false
 	)
 
-	ITimedOut := make(chan bool)
-	go func() { time.Sleep(time.Second); ITimedOut <- true }()
+	// ITimedOut := make(chan bool)
+	// go func() { time.Sleep(time.Second); ITimedOut <- true }()
 
-	select { //gets msg from bcast.recieve if we have successfully connected
-	case initSuccess := <-IncomingMessageChannel:
-		elevatorList = initSuccess.ElevList
-		update = true
+	// select { //gets msg from bcast.recieve if we have successfully connected
+	// case initSuccess := <-IncomingMessageChannel:
+	// 	elevatorList = initSuccess.ElevList
+	// 	update = true
 
-	case <-ITimedOut:
-		timeOut = true
-	}
+	// case <-ITimedOut:
+	// 	timeOut = true
+	// }
 
 	println("Timed out: ", timeOut)
 
@@ -82,7 +83,11 @@ func SynchronizerRoutine(myID int, PeerUpdateChannel <-chan peers.PeerUpdate,
 		for {
 			select {
 			case OnlineListUpdate := <-OnlineElevChannel:
+				println("ONLINE ELEVATORS UPDATED IN SYNC!")
 				onlineElevators = OnlineListUpdate
+				println(onlineElevators[0], " ", onlineElevators[1], " ", onlineElevators[2], "\n")
+				go func() {OnlineElevChannelControl <- onlineElevators}()
+				
 			}
 		}
 	}()
@@ -117,12 +122,13 @@ func SynchronizerRoutine(myID int, PeerUpdateChannel <-chan peers.PeerUpdate,
 					println("local order added")
 				}
 			} else {
-
-				if onlineElevators[order.ID] {
+				if order.Complete {
+					elevatorList[order.ID].Queue[order.Floor][order.Button] = false
+				} else if onlineElevators[order.ID] {
 					println("Order registered for elevator ", order.ID)
 					elevatorList[order.ID].Queue[order.Floor][order.Button] = true
 				} else {
-					println("ERROR: Could not assign order ot offline-elevator")
+					println("ERROR: Could not assign order to offline-elevator", order.ID)
 					println(onlineElevators[0], " ", onlineElevators[1], " ", onlineElevators[2], "\n")
 				}
 			}

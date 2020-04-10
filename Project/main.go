@@ -27,7 +27,7 @@ func main() {
 	flag.Parse()
 	intID, _ = strconv.Atoi(ID)
 
-	println(ID)
+	println("My ID is: ", intID)
 	println(simPort)
 
 	if simPort != "" {
@@ -48,7 +48,8 @@ func main() {
 	//control-sync channels
 	ControlToSyncChannel := make(chan [NumElevators]Elev)
 	SyncToControlChannel := make(chan [NumElevators]Elev)
-	OnlineElevChannel := make(chan [NumElevators]bool)
+	OnlineElevSyncChannel := make(chan [NumElevators]bool)
+	OnlineElevControlChannel := make(chan [NumElevators]bool)
 	syncOrderCompleteChannel := make(chan Order)
 	reassignChannel := make(chan int)
 
@@ -62,7 +63,7 @@ func main() {
 	InMsg := make(chan Message)
 
 	go peers.Transmitter(42035, ID, PeerTxEnable)
-	go synchronize.ConnectedElevatorsRoutine(PeerUpdateChannel, OnlineElevChannel, reassignChannel)
+	go synchronize.ConnectedElevatorsRoutine(PeerUpdateChannel, OnlineElevSyncChannel, reassignChannel)
 	go peers.Receiver(42035, PeerUpdateChannel)
 
 	go elevio.PollButtons(newOrderChannel)
@@ -70,8 +71,8 @@ func main() {
 
 	go fsm.FsmRoutine(sensorChannel, OrderToFSMChannel, fsmUpdateChannel, fsmOrderCompleteChannel)
 	go control.SetOrderLightsRoutine(UpdateLightsChannel, intID)
-	go control.ControlRoutine(intID, ControlToSyncChannel, SyncToControlChannel, OrderToFSMChannel, newOrderChannel, fsmUpdateChannel, UpdateLightsChannel, OnlineElevChannel, fsmOrderCompleteChannel, syncOrderCompleteChannel, reassignChannel)
-	go synchronize.SynchronizerRoutine(intID, PeerUpdateChannel, PeerTxEnable, ControlToSyncChannel, SyncToControlChannel, InMsg, OutMsg, OnlineElevChannel, syncOrderCompleteChannel)
+	go control.ControlRoutine(intID, ControlToSyncChannel, SyncToControlChannel, OrderToFSMChannel, newOrderChannel, fsmUpdateChannel, UpdateLightsChannel, OnlineElevSyncChannel, fsmOrderCompleteChannel, syncOrderCompleteChannel, reassignChannel, OnlineElevControlChannel)
+	go synchronize.SynchronizerRoutine(intID, PeerUpdateChannel, PeerTxEnable, ControlToSyncChannel, SyncToControlChannel, InMsg, OutMsg, OnlineElevSyncChannel, OnlineElevControlChannel, syncOrderCompleteChannel)
 
 	go bcast.Transmitter(42034, OutMsg)
 	go bcast.Receiver(42034, InMsg)
