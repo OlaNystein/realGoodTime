@@ -27,14 +27,14 @@ func orderAlreadyRecorded(elevList [NumElevators]Elev, order ButtonEvent) bool {
 }
 
 //Assigns an order to an elevator
-func calculateCost(myID int, elevList [NumElevators]Elev, newOrder ButtonEvent, onlineElevators [NumElevators]bool) int {
+func calculateCost(myID int, lostID int,  elevList [NumElevators]Elev, newOrder ButtonEvent, onlineElevators [NumElevators]bool) int {
 	if newOrder.Button == BT_Cab {
 		return myID
 	}
 	bestCost := 1000
 	theChosenOne := myID
 	for elev := 0; elev < NumElevators; elev++ {
-		if !onlineElevators[elev] {
+		if !onlineElevators[elev] || elev == lostID {
 			println("Elevator ", elev, " is not online")
 			continue
 		}
@@ -203,7 +203,7 @@ func ControlRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 			println("\nRecieved new order for button ", newOrder.Button, " at floor ", newOrder.Floor)
 
 			if online && !orderAlreadyRecorded(elevatorList, newOrder) {
-				optElev := calculateCost(myID, elevatorList, newOrder, onlineElevators)
+				optElev := calculateCost(myID, -1, elevatorList, newOrder, onlineElevators)
 				order.ID = optElev
 				order.Floor = newOrder.Floor
 				order.Button = newOrder.Button
@@ -274,7 +274,7 @@ func ControlRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 							var disconnectedOrder ButtonEvent
 							disconnectedOrder.Floor = floor
 							disconnectedOrder.Button = btn
-							optElev := calculateCost(myID, elevatorList, disconnectedOrder, onlineElevators)
+							optElev := calculateCost(myID, lostID, elevatorList, disconnectedOrder, onlineElevators)
 
 							deleteOrder := Order{Complete: true, Button: btn, Floor: floor, ID: lostID}
 							go func() { SyncOrderChannel <- deleteOrder }()
