@@ -27,7 +27,7 @@ func orderAlreadyRecorded(elevList [NumElevators]Elev, order ButtonEvent) bool {
 }
 
 //Assigns an order to an elevator
-func calculateCost(myID int, lostID int,  elevList [NumElevators]Elev, newOrder ButtonEvent, onlineElevators [NumElevators]bool) int {
+func calculateCost(myID int, lostID int, elevList [NumElevators]Elev, newOrder ButtonEvent, onlineElevators [NumElevators]bool) int {
 	if newOrder.Button == BT_Cab {
 		return myID
 	}
@@ -169,12 +169,12 @@ func ControlRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 	fsmUpdateChannel <-chan Elev, updateLightChannel chan<- [NumElevators]Elev,
 	OnlineElevChannel <-chan [NumElevators]bool, FSMCompleteOrderChannel <-chan Order,
 	SyncOrderChannel chan<- Order, reassignChannel <-chan int,
-	OnlineElevChannelControl <-chan [NumElevators]bool,
-	) {
+	OnlineElevChannelControl <-chan [NumElevators]bool, motorStoppedChannel <-chan bool) {
 
 	var (
 		elevatorList    [NumElevators]Elev
 		onlineElevators [NumElevators]bool
+		motorStopped    bool
 		online          bool
 		order           Order
 	)
@@ -192,6 +192,8 @@ func ControlRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 				onlineElevators = OnlineListUpdate
 				println(onlineElevators[0], " ", onlineElevators[1], " ", onlineElevators[2], "\n")
 				online = onlineElevators[myID]
+			case motorStatus := <-motorStoppedChannel:
+				motorStopped = motorStatus
 			}
 		}
 	}()
@@ -203,12 +205,17 @@ func ControlRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 			println("\nRecieved new order for button ", newOrder.Button, " at floor ", newOrder.Floor)
 
 			if online && !orderAlreadyRecorded(elevatorList, newOrder) {
-				optElev := calculateCost(myID, -1, elevatorList, newOrder, onlineElevators)
-				order.ID = optElev
-				order.Floor = newOrder.Floor
-				order.Button = newOrder.Button
-				order.Complete = false
-				go func() { SyncOrderChannel <- order }()
+				if !motorStopped || newOrder.Button == BT_Cab {
+					optElev := calculateCost(myID, -1, elevatorList, newOrder, onlineElevators)
+					order.ID = optElev
+					order.Floor = newOrder.Floor
+					order.Button = newOrder.Button
+					order.Complete = false
+					go func() { SyncOrderChannel <- order }()
+				} else if motorStopped {
+					println("\nERROR: Cannot accept hall-orders for stuck elevator")
+					continue
+				}
 			} else if !online && !orderAlreadyRecorded(elevatorList, newOrder) {
 				if newOrder.Button == BT_Cab {
 					println("\nCaborder registered for offline elevator")

@@ -101,11 +101,18 @@ func fsmInit(sensorChannel <-chan int, elevator Elev) Elev {
 	return elevator
 }
 
-func FsmRoutine(sensorChannel <-chan int, orderToFsmChannel <-chan Elev, fsmUpdateChannel chan<- Elev, FSMCompleteOrderChannel chan<- Order) {
+func FsmRoutine(myID int,
+	sensorChannel <-chan int,
+	orderToFsmChannel <-chan Elev,
+	fsmUpdateChannel chan<- Elev,
+	FSMCompleteOrderChannel chan<- Order,
+	reassignChannel chan<- int,
+	motorStoppedChannel chan<- bool) {
 	var (
-		elevator     Elev
-		lastElevator Elev
-		update       bool
+		elevator      Elev
+		lastElevator  Elev
+		motorProblems bool
+		update        bool
 	)
 
 	// doorTimer := time.NewTimer(3 * time.Second)
@@ -120,7 +127,6 @@ func FsmRoutine(sensorChannel <-chan int, orderToFsmChannel <-chan Elev, fsmUpda
 			case tempElev := <-orderToFsmChannel:
 				lastElevator = elevator
 				elevator.Queue = tempElev.Queue
-				println("\nLocal FSM recieved elevator-update!")
 			case <-printTicker.C:
 				//printLocalOrders(elevator)
 			}
@@ -131,6 +137,32 @@ func FsmRoutine(sensorChannel <-chan int, orderToFsmChannel <-chan Elev, fsmUpda
 		switch elevator.State {
 		case IDLE:
 			//println("I am IDLE")
+			if motorProblems {
+				elevator.Dir = MD_Down
+				elevio.SetMotorDirection(elevator.Dir)
+
+				go func() {
+					for elevator.Floor == -1 {
+						resetDirTimer := time.NewTimer(2 * time.Second)
+						select {
+						case <-resetDirTimer.C:
+							if elevator.Floor == -1 {
+								elevio.SetMotorDirection(MD_Down)
+							} else {
+								break
+							}
+						}
+					}
+				}()
+
+				elevator.Floor = <-sensorChannel
+				println("We re-initialized at floor: ", elevator.Floor)
+				elevio.SetMotorDirection(MD_Stop)
+				elevio.SetFloorIndicator(elevator.Floor)
+				motorProblems = false
+				motorStoppedChannel <- motorProblems
+			}
+
 			if elevator.Dir != MD_Stop {
 				elevio.SetMotorDirection(MD_Stop)
 				elevator.Dir = MD_Stop
@@ -156,10 +188,13 @@ func FsmRoutine(sensorChannel <-chan int, orderToFsmChannel <-chan Elev, fsmUpda
 
 		case RUNNING:
 			elevio.SetMotorDirection(elevator.Dir)
+			motorErrorTimer := time.NewTimer(4 * time.Second)
+
 			select {
 			case tempFloor := <-sensorChannel:
 				println("at floor", tempFloor)
 				if tempFloor != -1 {
+					motorErrorTimer.Stop()
 					elevator.Floor = tempFloor
 					elevio.SetFloorIndicator(elevator.Floor)
 					if FsmShouldIStop(elevator) {
@@ -167,7 +202,38 @@ func FsmRoutine(sensorChannel <-chan int, orderToFsmChannel <-chan Elev, fsmUpda
 					}
 					update = true
 				}
+			case <-motorErrorTimer.C:
+				println("Motor has stopped!")
+				retryCounter := 0
+				for retryCounter < 3 {
+					motorErrorTimer.Reset(2 * time.Second)
+					elevio.SetMotorDirection(elevator.Dir)
+					select {
+					case tempFloor := <-sensorChannel:
+						println("at floor", tempFloor)
+						if tempFloor != -1 {
+							motorErrorTimer.Stop()
+							elevator.Floor = tempFloor
+							elevio.SetFloorIndicator(elevator.Floor)
+							if FsmShouldIStop(elevator) {
+								elevator.State = DOOR_OPEN
+							}
+							retryCounter = 3
+							update = true
 
+						}
+					case <-motorErrorTimer.C:
+						retryCounter++
+						if retryCounter == 3 {
+							println("ERROR: Was not able to restart engine. Reassigning orders.")
+							reassignChannel <- myID
+							elevator.Floor = -1
+							motorProblems = true
+							motorStoppedChannel <- motorProblems
+							elevator.State = IDLE
+						}
+					}
+				}
 			}
 			break
 

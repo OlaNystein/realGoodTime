@@ -44,6 +44,7 @@ func main() {
 	OrderToFSMChannel := make(chan Elev)
 	fsmUpdateChannel := make(chan Elev)
 	fsmOrderCompleteChannel := make(chan Order)
+	motorStoppedChannel := make(chan bool)
 
 	//control-sync channels
 	ControlToSyncChannel := make(chan [NumElevators]Elev)
@@ -69,9 +70,9 @@ func main() {
 	go elevio.PollButtons(newOrderChannel)
 	go elevio.PollFloorSensor(sensorChannel)
 
-	go fsm.FsmRoutine(sensorChannel, OrderToFSMChannel, fsmUpdateChannel, fsmOrderCompleteChannel)
+	go fsm.FsmRoutine(intID, sensorChannel, OrderToFSMChannel, fsmUpdateChannel, fsmOrderCompleteChannel, reassignChannel, motorStoppedChannel)
 	go control.SetOrderLightsRoutine(UpdateLightsChannel, intID)
-	go control.ControlRoutine(intID, ControlToSyncChannel, SyncToControlChannel, OrderToFSMChannel, newOrderChannel, fsmUpdateChannel, UpdateLightsChannel, OnlineElevSyncChannel, fsmOrderCompleteChannel, syncOrderCompleteChannel, reassignChannel, OnlineElevControlChannel)
+	go control.ControlRoutine(intID, ControlToSyncChannel, SyncToControlChannel, OrderToFSMChannel, newOrderChannel, fsmUpdateChannel, UpdateLightsChannel, OnlineElevSyncChannel, fsmOrderCompleteChannel, syncOrderCompleteChannel, reassignChannel, OnlineElevControlChannel, motorStoppedChannel)
 	go synchronize.SynchronizerRoutine(intID, PeerUpdateChannel, PeerTxEnable, ControlToSyncChannel, SyncToControlChannel, InMsg, OutMsg, OnlineElevSyncChannel, OnlineElevControlChannel, syncOrderCompleteChannel)
 
 	go bcast.Transmitter(42034, OutMsg)
