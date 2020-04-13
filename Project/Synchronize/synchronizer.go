@@ -12,9 +12,25 @@ import (
 	. "../Config"
 )
 
-func ConnectedElevatorsRoutine(PeerUpdateChannel <-chan peers.PeerUpdate, OnlineElevChannel chan<- [NumElevators]bool, reassignChannel chan<- int) {
+func syncClearNonLocalOrders(elevatorList [NumElevators]Elev, myID int) [NumElevators]Elev {
+	for e := 0; e < NumElevators; e++ {
+		if e != myID {
+			for floor := 0; floor < NumFloors; floor++ {
+				for btn := 0; btn < NumButtonTypes; btn++ {
+					elevatorList[e].Queue[floor][btn] = false
+				}
+			}
+		}
+	}
+	return elevatorList
+}
 
-	var onlineElevators [NumElevators]bool
+func ConnectedElevatorsRoutine(PeerUpdateChannel <-chan peers.PeerUpdate, OnlineElevChannel chan<- [NumElevators]bool, reassignChannel chan<- int, timedOutChannel chan<- bool) {
+
+	var (
+		onlineElevators [NumElevators]bool
+		timeOut 		bool = true
+	)
 	for {
 		select {
 		case p := <-PeerUpdateChannel:
@@ -25,13 +41,16 @@ func ConnectedElevatorsRoutine(PeerUpdateChannel <-chan peers.PeerUpdate, Online
 			fmt.Printf("  Lost:     %q\n", p.Lost)
 
 			if len(p.Peers) == 0 { //we have timed out
-				//TimeOut = true
+				timeOut = true
+				go func(){timedOutChannel <- timeOut}()
 
 			} 
 			if p.New != "" { //new elevator connected
 				newPeerID, _ := strconv.Atoi(p.New)
 				println(newPeerID, "Just connected!")
 				onlineElevators[newPeerID] = true
+				timeOut = false
+				go func(){timedOutChannel <- timeOut}()
 
 			}
 			if len(p.Lost) > 0 { // lost boys
@@ -55,7 +74,8 @@ func SynchronizerRoutine(myID int, PeerUpdateChannel <-chan peers.PeerUpdate,
 	OutgoingMessageChannel chan<- Message,
 	OnlineElevChannel <-chan [NumElevators]bool,
 	OnlineElevChannelControl chan<- [NumElevators]bool,
-	SyncOrderChannel <-chan Order) {
+	SyncOrderChannel <-chan Order,
+	timedOutChannel <-chan bool) {
 
 	var (
 		onlineElevators [NumElevators]bool
@@ -64,18 +84,7 @@ func SynchronizerRoutine(myID int, PeerUpdateChannel <-chan peers.PeerUpdate,
 		update          bool
 		timeOut         bool = false
 	)
-
-	// ITimedOut := make(chan bool)
-	// go func() { time.Sleep(time.Second); ITimedOut <- true }()
-
-	// select { //gets msg from bcast.recieve if we have successfully connected
-	// case initSuccess := <-IncomingMessageChannel:
-	// 	elevatorList = initSuccess.ElevList
-	// 	update = true
-
-	// case <-ITimedOut:
-	// 	timeOut = true
-	// }
+	
 
 	println("Timed out: ", timeOut)
 
@@ -86,19 +95,23 @@ func SynchronizerRoutine(myID int, PeerUpdateChannel <-chan peers.PeerUpdate,
 				println("ONLINE ELEVATORS UPDATED IN SYNC!")
 				onlineElevators = OnlineListUpdate
 				println(onlineElevators[0], " ", onlineElevators[1], " ", onlineElevators[2], "\n")
+				if !onlineElevators[myID] {
+					timeOut = true
+				}
 				go func() {OnlineElevChannelControl <- onlineElevators}()
+			case timeOut= <-timedOutChannel:
 				
+				if timeOut{
+					println("I disconnected from the network!")
+					elevatorList = syncClearNonLocalOrders(elevatorList, myID)
+				} else {
+					println("I connected to the network")
+				}
 			}
 		}
 	}()
 
 	for {
-		if timeOut {
-			if onlineElevators[myID] {
-				//onlineElevators[myID] = false
-
-			}
-		}
 		select {
 
 		//Records update to local elevator
@@ -120,9 +133,10 @@ func SynchronizerRoutine(myID int, PeerUpdateChannel <-chan peers.PeerUpdate,
 				} else {
 					elevatorList[myID].Queue[order.Floor][order.Button] = true
 					println("local order added")
+					
 				}
 			} else {
-				if order.Complete {
+				if order.Complete { //order reassigned
 					elevatorList[order.ID].Queue[order.Floor][order.Button] = false
 				} else if onlineElevators[order.ID] {
 					println("Order registered for elevator ", order.ID)
@@ -136,8 +150,10 @@ func SynchronizerRoutine(myID int, PeerUpdateChannel <-chan peers.PeerUpdate,
 			outgoingPackage.ID = myID
 			outgoingPackage.ElevList = elevatorList
 			go func() {
-				for i := 0; i < 3; i++ {
-					OutgoingMessageChannel <- outgoingPackage
+				if !timeOut{
+					for i := 0; i < 3; i++ {
+						OutgoingMessageChannel <- outgoingPackage
+					}
 				}
 			}()
 			go func() { SyncToControlChannel <- elevatorList }()
