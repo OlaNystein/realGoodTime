@@ -78,12 +78,6 @@ func fsmInit(sensorChannel <-chan int, elevator Elev) Elev {
 	elevator.Floor = -1
 	elevator.Dir = MD_Stop
 	fmt.Println("1")
-	for i := 0; i < NumFloors; i++ {
-		for j := 0; j < NumButtonTypes; j++ {
-			elevator.Queue[i][j] = false
-			elevio.SetButtonLamp(ButtonType(j), i, false)
-		}
-	}
 	fmt.Println("2")
 	if elevator.Floor != -1 {
 		elevator.State = IDLE

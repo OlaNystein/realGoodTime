@@ -3,6 +3,8 @@ package synchronize
 import (
 	"fmt"
 	"strconv"
+	"time"
+
 	//"time"
 
 	// "../network/bcast"
@@ -25,11 +27,21 @@ func syncClearNonLocalOrders(elevatorList [NumElevators]Elev, myID int) [NumElev
 	return elevatorList
 }
 
+func checkOnlineElevators(onlineElevators [NumElevators]bool) int {
+	onlinecount := 0
+	for elev := 0; elev < len(onlineElevators); elev++ {
+		if onlineElevators[elev] {
+			onlinecount++
+		}
+	}
+	return onlinecount
+}
+
 func ConnectedElevatorsRoutine(PeerUpdateChannel <-chan peers.PeerUpdate, OnlineElevChannel chan<- [NumElevators]bool, reassignChannel chan<- int, timedOutChannel chan<- bool) {
 
 	var (
 		onlineElevators [NumElevators]bool
-		timeOut 		bool = true
+		timeOut         bool = true
 	)
 	for {
 		select {
@@ -42,15 +54,15 @@ func ConnectedElevatorsRoutine(PeerUpdateChannel <-chan peers.PeerUpdate, Online
 
 			if len(p.Peers) == 0 { //we have timed out
 				timeOut = true
-				go func(){timedOutChannel <- timeOut}()
+				go func() { timedOutChannel <- timeOut }()
 
-			} 
+			}
 			if p.New != "" { //new elevator connected
 				newPeerID, _ := strconv.Atoi(p.New)
 				println(newPeerID, "Just connected!")
 				onlineElevators[newPeerID] = true
 				timeOut = false
-				go func(){timedOutChannel <- timeOut}()
+				go func() { timedOutChannel <- timeOut }()
 
 			}
 			if len(p.Lost) > 0 { // lost boys
@@ -58,10 +70,10 @@ func ConnectedElevatorsRoutine(PeerUpdateChannel <-chan peers.PeerUpdate, Online
 					lostPeerID, _ := strconv.Atoi(p.Lost[lostPeer])
 					println(lostPeerID, " just disconnected")
 					onlineElevators[lostPeerID] = false
-					go func(){reassignChannel <- lostPeerID}()
+					go func() { reassignChannel <- lostPeerID }()
 				}
 			}
-			go func(){OnlineElevChannel <- onlineElevators}()
+			go func() { OnlineElevChannel <- onlineElevators }()
 		}
 	}
 }
@@ -84,9 +96,6 @@ func SynchronizerRoutine(myID int, PeerUpdateChannel <-chan peers.PeerUpdate,
 		update          bool
 		timeOut         bool = false
 	)
-	
-
-	println("Timed out: ", timeOut)
 
 	go func() {
 		for {
@@ -98,10 +107,22 @@ func SynchronizerRoutine(myID int, PeerUpdateChannel <-chan peers.PeerUpdate,
 				if !onlineElevators[myID] {
 					timeOut = true
 				}
-				go func() {OnlineElevChannelControl <- onlineElevators}()
-			case timeOut= <-timedOutChannel:
-				
-				if timeOut{
+				if checkOnlineElevators(onlineElevators) > 1 {
+					outgoingPackage.ID = myID
+					outgoingPackage.ElevList = elevatorList
+					outgoingPackage.NewOrder.ID = -1
+					go func() {
+						if !timeOut {
+							for i := 0; i < 3; i++ {
+								OutgoingMessageChannel <- outgoingPackage
+							}
+						}
+					}()
+				}
+				go func() { OnlineElevChannelControl <- onlineElevators }()
+			case timeOut = <-timedOutChannel:
+
+				if timeOut {
 					println("I disconnected from the network!")
 					elevatorList = syncClearNonLocalOrders(elevatorList, myID)
 				} else {
@@ -110,6 +131,19 @@ func SynchronizerRoutine(myID int, PeerUpdateChannel <-chan peers.PeerUpdate,
 			}
 		}
 	}()
+
+	//Initialize the elevatorlist
+	initTimer := time.NewTimer(3 * time.Second)
+	select {
+	case initMsg := <-IncomingMessageChannel:
+		println("Current length of online elevators: ", checkOnlineElevators(onlineElevators))
+		if checkOnlineElevators(onlineElevators) > 1 {
+			elevatorList = initMsg.ElevList
+			go func() { SyncToControlChannel <- elevatorList }()
+		}
+	case <-initTimer.C:
+		println("Warning: Not able to initialize peer elevatorlist")
+	}
 
 	for {
 		select {
@@ -133,7 +167,7 @@ func SynchronizerRoutine(myID int, PeerUpdateChannel <-chan peers.PeerUpdate,
 				} else {
 					elevatorList[myID].Queue[order.Floor][order.Button] = true
 					println("local order added")
-					
+
 				}
 			} else {
 				if order.Complete { //order reassigned
@@ -150,7 +184,7 @@ func SynchronizerRoutine(myID int, PeerUpdateChannel <-chan peers.PeerUpdate,
 			outgoingPackage.ID = myID
 			outgoingPackage.ElevList = elevatorList
 			go func() {
-				if !timeOut{
+				if !timeOut {
 					for i := 0; i < 3; i++ {
 						OutgoingMessageChannel <- outgoingPackage
 					}
