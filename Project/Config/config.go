@@ -6,6 +6,7 @@ import (
 	"time"
 )
 
+//Constants
 const NumFloors int = 4
 const NumElevators int = 3
 const NumButtonTypes int = 3
@@ -14,7 +15,7 @@ var _initialized bool = false
 var _mtx sync.Mutex
 var _conn net.Conn
 
-//HARDWARE configs
+//Datastructures used by the Hardware
 const PollRate = 20 * time.Millisecond
 
 type ButtonType int
@@ -38,15 +39,7 @@ type ButtonEvent struct {
 	Button ButtonType
 }
 
-//CONFIG-types:
-type Elev struct {
-	ElevatorID int
-	State      ElevState
-	Dir        MotorDirection
-	Floor      int
-	Queue      [NumFloors][NumButtonTypes]bool
-}
-
+//Datastructures for communication
 type ElevState int
 
 const (
@@ -56,17 +49,23 @@ const (
 	DOOR_OPEN           = 2
 )
 
+type Elev struct {
+	ElevatorID int
+	State      ElevState
+	Dir        MotorDirection
+	Floor      int
+	Queue      [NumFloors][NumButtonTypes]bool
+}
 
 type Order struct {
 	Complete bool
-	Button      ButtonType
+	Button   ButtonType
 	Floor    int
 	ID       int
 }
 
 type Message struct {
-	ElevList  [NumElevators]Elev
-	NewOrder  Order
-	ID        int
+	ElevList [NumElevators]Elev
+	NewOrder Order
+	ID       int
 }
-
