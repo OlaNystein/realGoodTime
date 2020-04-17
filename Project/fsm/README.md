@@ -18,12 +18,12 @@ Contents
 - **fsmInit** A private function to initialize the elevator. Drives it down one floor and turns on the floor indicator. 
 - **FsmRoutine** A public function starting the FSM for the elevator. The function is called from main and runs as its own routine parallel to all the others. It runs a separate routine to check for incoming orders. The cases in the routine are changed through various events:
     - Case *IDLE*: The elevator is standing still, checking for orders at each iteration.
-        - Event *New order*: If a new order occurs, either above below or at the floor, the elevator will notice and go to *RUNNING* or *DOOR_OPEN* with the appropriate direction set.
-        - Event *Elevator not standing still*: Sets the motor direction to `MD_Stop`.
-        - Event *Motor stopped*: Elevator is sent to *IDLE* from *RUNNING* if power was cut from the motor. In *IDLE*, the elevator will stay unavailable till it re-initializes to a floor.
+        - Event "*New order*": If a new order occurs, either above below or at the floor, the elevator will notice and go to *RUNNING* or *DOOR_OPEN* with the appropriate direction set.
+        - Event "*Elevator not standing still*": Sets the motor direction to `MD_Stop`.
+        - Event "*Motor stopped*": Elevator is sent to *IDLE* from *RUNNING* if power was cut from the motor. In *IDLE*, the elevator will stay unavailable till it re-initializes to a floor.
     - Case *RUNNING*: The elevator sets the motor direction from *IDLE* and starts a timer for which it wants to have reached the next floor. 
-        - Event *Sensor channel updated*: The elevator updates indicators and floor-variable before checking if it should stop at the floor. If it does, the state is set to *DOOR_OPEN*. If not it remains in *RUNNING*.
-        - Event *Error timer goes off*: If the elevator does not reach a floor in the required time, the fsm tries to reset the motor direction three times before failing. If this occurs, we tell control that we have stopped and wish to reassign our orders to the other online peers. We further set ourselves to *IDLE*, into the **motor stopped**-event.
-    - Case *DOOR_OPEN*: The elevator expedites an order at a floor and opens the door by turning on the door-open light for 3 seconds.
-        - Event *fsmShouldIContinue*: The elevator sees more orders in the same direction. State is set to *RUNNING*. 
-        - Event *!fsmShouldIContinue*: The elevator sees no more orders in the same direction. State is set to *IDLE*. 
+        - Event "*Sensor channel updated*": The elevator updates indicators and floor-variable before checking if it should stop at the floor. If it does, the state is set to *DOOR_OPEN*. If not it remains in *RUNNING*.
+        - Event "*Error timer goes off*": If the elevator does not reach a floor in the required time, the fsm tries to reset the motor direction three times before failing. If this occurs, we tell control that we have stopped and wish to reassign our orders to the other online peers. We further set ourselves to *IDLE*, into the **motor stopped**-event.
+    - Case *DOOR_OPEN*: The elevator expedites an order at a floor and opens the door by turning on the door-open light for 3 seconds. It then generates an order with `order.Complete = True`, which is sent to `Control`.
+        - Event "*fsmShouldIContinue*": The elevator sees more orders in the same direction. State is set to *RUNNING*. 
+        - Event "*!fsmShouldIContinue*": The elevator sees no more orders in the same direction. State is set to *IDLE*. 

@@ -205,7 +205,7 @@ func ControlRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 			println("\nRecieved new order for button ", newOrder.Button, " at floor ", newOrder.Floor)
 
 			if online && !orderAlreadyRecorded(elevatorList, newOrder) {
-				if !motorStopped || newOrder.Button == BT_Cab {
+				if !motorStopped {
 					optElev := calculateCost(myID, -1, elevatorList, newOrder, onlineElevators)
 					order.ID = optElev
 					order.Floor = newOrder.Floor
@@ -213,7 +213,7 @@ func ControlRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 					order.Complete = false
 					go func() { SyncOrderChannel <- order }()
 				} else if motorStopped {
-					println("\nERROR: Cannot accept hall-orders for stuck elevator")
+					println("\nERROR: Cannot accept orders for stuck elevator")
 					continue
 				}
 			} else if !online && !orderAlreadyRecorded(elevatorList, newOrder) {
@@ -236,7 +236,7 @@ func ControlRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 		//Control recieves an updated elevatorlist from the Syncronizer
 		case tempElevList := <-SyncToControlChannel:
 			println("Control recieved updated elevatorlist from sync")
-			
+
 			for elev := 0; elev < NumElevators; elev++ {
 				if elev != myID {
 					elevatorList[elev] = tempElevList[elev]
@@ -248,24 +248,20 @@ func ControlRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 
 			go func() { OrderToFSMChannel <- elevatorList[myID] }()
 
-			
-
 		//Control recieves an update from the local fsm
 		case updatedElevator := <-fsmUpdateChannel:
 
 			tempQ := elevatorList[myID].Queue //preserve the queue
 			elevatorList[myID] = updatedElevator
 			elevatorList[myID].Queue = tempQ
-			
+
 			go func() { ControlToSyncChannel <- elevatorList }()
-			
 
 		case finished := <-FSMCompleteOrderChannel:
 			println("\nOrder Finished!")
 			finished.ID = myID
 			finished.Complete = true
 			go func() { SyncOrderChannel <- finished }()
-
 
 		case lostID := <-reassignChannel:
 			if online {
