@@ -11,7 +11,5 @@ Contents
 - **orderAlreadyRecorded:** A private function checking if an order is present or not in the current list of elevators. 
 - **calculateCost:** A private function calculating the optimal elevator to take an order. It uses the current information about all elevators on the network, their online-status and a new order which is to be assigned. It also takes in the assigning elevators own ID to quickly assign `BT_Cab` orders and can reassign orders to elevators that have disconnected or otherwise dissapeared from the network. When no elevator is lost, `lostID = -1`.
 - **SetOrderLightsRoutine:** A public function to be run from main. It starts a routine which will update order ligths in parallel with the other routines of the elevator. It will sense updates to `updateLightChannel` and change the button-lights to match the current state of the elevator-network. All elevators are to have the same hall-lights at their separate floors and individual cab-lights. 
-- **ControlRoutine:** A public function to be run from main. It works in parallell with all the other routines of the elevator, and handles orders from `newOrderChannel`, `FsmCompleteOrderChannel`, `SyncToControlChannel` and `reassignChannel`. It also records updates to the elevators state, floor and direction through `fsmUpdateChannel`. \\
-\\
-testing
+- **ControlRoutine:** A public function to be run from main. It works in parallell with all the other routines of the elevator, and handles orders from `newOrderChannel`, `FsmCompleteOrderChannel`, `SyncToControlChannel` and `reassignChannel`. It also records updates to the elevators state, floor and direction through `fsmUpdateChannel`. 
     - case 
