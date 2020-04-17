@@ -41,7 +41,6 @@ func FsmShouldIContinue(elevator Elev) bool {
 
 func fsmOrdersAbove(elevator Elev) bool {
 	for i := elevator.Floor + 1; i < NumFloors; i++ {
-		//for j := 0; j < NumButtonTypes; j++ {
 		for j := ButtonType(0); j < 3; j++ {
 			if elevator.Queue[i][j] {
 				return true
@@ -53,7 +52,6 @@ func fsmOrdersAbove(elevator Elev) bool {
 
 func fsmOrdersBelow(elevator Elev) bool {
 	for i := 0; i < elevator.Floor; i++ {
-		//for j := 0; j < NumButtonTypes; j++ {
 		for j := ButtonType(0); j < 3; j++ {
 			if elevator.Queue[i][j] {
 				return true
@@ -64,7 +62,6 @@ func fsmOrdersBelow(elevator Elev) bool {
 }
 
 func fsmOrdersAtMe(elevator Elev) bool {
-	//for j := 0; j < NumButtonTypes; j++ {
 	for j := ButtonType(0); j < 3; j++ {
 		if elevator.Queue[elevator.Floor][j] {
 			return true
@@ -79,18 +76,15 @@ func fsmInit(sensorChannel <-chan int, elevator Elev) Elev {
 	elevator.Dir = MD_Stop
 	fmt.Println("1")
 	fmt.Println("2")
-	if elevator.Floor != -1 {
-		elevator.State = IDLE
-		elevio.SetFloorIndicator(elevator.Floor)
-	} else {
-		elevator.Dir = MD_Down
-		elevio.SetMotorDirection(elevator.Dir)
-		for elevator.Floor == -1 {
-			elevator.Floor = <-sensorChannel
-		}
-		elevio.SetFloorIndicator(elevator.Floor)
-		elevator.State = IDLE
+
+	elevator.Dir = MD_Down
+	elevio.SetMotorDirection(elevator.Dir)
+	for elevator.Floor == -1 {
+		elevator.Floor = <-sensorChannel
 	}
+	elevio.SetFloorIndicator(elevator.Floor)
+	elevator.State = IDLE
+
 	fmt.Println("3")
 	return elevator
 }
@@ -109,9 +103,6 @@ func FsmRoutine(myID int,
 		update        bool
 	)
 
-	// doorTimer := time.NewTimer(3 * time.Second)
-	printTicker := time.NewTicker(2 * time.Second)
-	//Remember to add a try/catch here later on
 	elevator = fsmInit(sensorChannel, elevator)
 	fsmUpdateChannel <- elevator
 
@@ -121,8 +112,6 @@ func FsmRoutine(myID int,
 			case tempElev := <-orderToFsmChannel:
 				lastElevator = elevator
 				elevator.Queue = tempElev.Queue
-			case <-printTicker.C:
-				//printLocalOrders(elevator)
 			}
 		}
 	}()
@@ -130,7 +119,7 @@ func FsmRoutine(myID int,
 	for {
 		switch elevator.State {
 		case IDLE:
-			//println("I am IDLE")
+
 			if motorProblems {
 				elevator.Dir = MD_Down
 				elevio.SetMotorDirection(elevator.Dir)
@@ -165,16 +154,15 @@ func FsmRoutine(myID int,
 			if fsmOrdersAtMe(elevator) {
 				elevator.State = DOOR_OPEN
 				update = true
+
 			} else if fsmOrdersBelow(elevator) {
 				elevator.State = RUNNING
 				elevator.Dir = MD_Down
-				println("There are orders below")
-
 				update = true
+
 			} else if fsmOrdersAbove(elevator) {
 				elevator.State = RUNNING
 				elevator.Dir = MD_Up
-				println("There are orders above")
 				update = true
 			}
 
@@ -185,31 +173,38 @@ func FsmRoutine(myID int,
 			motorErrorTimer := time.NewTimer(4 * time.Second)
 
 			select {
+
 			case tempFloor := <-sensorChannel:
 				println("at floor", tempFloor)
 				if tempFloor != -1 {
+
 					motorErrorTimer.Stop()
 					elevator.Floor = tempFloor
 					elevio.SetFloorIndicator(elevator.Floor)
 					if FsmShouldIStop(elevator) {
+
 						elevator.State = DOOR_OPEN
 					}
 					update = true
 				}
 			case <-motorErrorTimer.C:
-				println("Motor has stopped!")
+				println("Motor has stopped! Trying to restart")
 				retryCounter := 0
 				for retryCounter < 3 {
+
 					motorErrorTimer.Reset(2 * time.Second)
 					elevio.SetMotorDirection(elevator.Dir)
 					select {
+
 					case tempFloor := <-sensorChannel:
-						println("at floor", tempFloor)
+
 						if tempFloor != -1 {
+
 							motorErrorTimer.Stop()
 							elevator.Floor = tempFloor
 							elevio.SetFloorIndicator(elevator.Floor)
 							if FsmShouldIStop(elevator) {
+
 								elevator.State = DOOR_OPEN
 							}
 							retryCounter = 3
@@ -232,7 +227,7 @@ func FsmRoutine(myID int,
 			break
 
 		case DOOR_OPEN:
-			// println("I am in DOOR OPEN")
+
 			elevio.SetMotorDirection(MD_Stop)
 
 			doorTimer := time.NewTimer(3 * time.Second)
@@ -250,20 +245,17 @@ func FsmRoutine(myID int,
 				//Stay in the same state
 			} else if FsmShouldIContinue(elevator) {
 				elevator.State = RUNNING
-
 			} else {
 				elevator.State = IDLE
-
 			}
 			update = true
 			break
 
 		}
 		if update && lastElevator != elevator {
-			println("UPDATING CONTROL")
+
 			update = false
 			go func() { fsmUpdateChannel <- elevator }()
-			println("CONTROL UPDATED!")
 		}
 
 	}

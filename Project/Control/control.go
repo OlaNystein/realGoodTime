@@ -3,7 +3,6 @@ package control
 import (
 	. "../Config"
 	"../elevio"
-	//"../fsm"
 )
 
 func printLocalOrders(elevatorList [NumElevators]Elev, myID int) {
@@ -27,7 +26,8 @@ func orderAlreadyRecorded(elevList [NumElevators]Elev, order ButtonEvent) bool {
 }
 
 //Assigns an order to an elevator
-func calculateCost(myID int, lostID int, elevList [NumElevators]Elev, newOrder ButtonEvent, onlineElevators [NumElevators]bool) int {
+func calculateCost(myID int, lostID int, elevList [NumElevators]Elev, newOrder ButtonEvent,
+	onlineElevators [NumElevators]bool) int {
 	if newOrder.Button == BT_Cab {
 		return myID
 	}
@@ -71,70 +71,6 @@ func calculateCost(myID int, lostID int, elevList [NumElevators]Elev, newOrder B
 
 }
 
-// func controlCostClearOrders(e_old Elev) Elev{
-// 	e := e_old
-// 	for btn := 0; btn < NumButtonTypes; btn++ {
-// 		if(e.Queue[e.Floor][btn]){
-// 			e.Queue[e.Floor][btn] = false
-// 		}
-// 	}
-// 	return e
-// }
-
-// func controlTimeToIdle(e Elev) int {
-// 	duration := 0
-
-// 	switch(e.State){
-// 	case IDLE:
-// 		if e.Dir == MD_Stop{
-// 			return duration
-// 		}
-// 		break
-// 	case RUNNING:
-// 		duration += 2
-// 		e.Floor += int(e.Dir)
-// 		break
-// 	case DOOR_OPEN:
-// 		duration += -2
-// 		break
-// 	}
-
-// 	for{
-// 		if fsm.FsmShouldIStop(e){
-// 			e = controlCostClearOrders(e)
-// 			duration += 3
-// 			if !(fsm.FsmShouldIContinue(e)){
-// 				return duration
-// 			}
-// 		}
-// 		e.Floor += int(e.Dir)
-// 		duration += 4
-// 	}
-
-// }
-
-// func controlCostFunction(elevList [NumElevators]Elev, onlineList [NumElevators]bool) int {
-
-// 	bestCost := 1000
-// 	theChosenOne := -1
-// 	var cost int
-
-// 	for i := 0; i < NumElevators; i++ {
-
-// 		if !onlineList[i] {
-// 			continue
-// 		}
-
-// 		cost = controlTimeToIdle(elevList[i])
-
-// 		if cost < bestCost {
-// 			bestCost = cost
-// 			theChosenOne = i
-// 		}
-
-// 	}
-// 	return theChosenOne
-// }
 
 func SetOrderLightsRoutine(updateLightChannel <-chan [NumElevators]Elev, myID int) {
 	for {
@@ -178,12 +114,8 @@ func ControlRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 		online          bool
 		order           Order
 	)
-	// onlineElevators = <-OnlineElevChannel
 
-	// elevatorList[myID] = <-fsmUpdateChannel
-	// online = onlineElevators[myID]
-
-	//Subroutine to update online elevators
+	//Subroutine to update online elevator list
 	go func() {
 		for {
 			select {
@@ -206,36 +138,41 @@ func ControlRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 
 			if online && !orderAlreadyRecorded(elevatorList, newOrder) {
 				if !motorStopped {
+
 					optElev := calculateCost(myID, -1, elevatorList, newOrder, onlineElevators)
 					order.ID = optElev
 					order.Floor = newOrder.Floor
 					order.Button = newOrder.Button
 					order.Complete = false
 					go func() { SyncOrderChannel <- order }()
+
 				} else if motorStopped {
+
 					println("\nERROR: Cannot accept orders for stuck elevator")
 					continue
 				}
 			} else if !online && !orderAlreadyRecorded(elevatorList, newOrder) {
 				if newOrder.Button == BT_Cab {
+
 					println("\nCaborder registered for offline elevator")
 					order.ID = myID
 					order.Floor = newOrder.Floor
 					order.Button = newOrder.Button
 					order.Complete = false
+
 					go func() { SyncOrderChannel <- order }()
 					go func() { updateLightChannel <- elevatorList }()
 					go func() { OrderToFSMChannel <- elevatorList[myID] }()
+
 				} else {
+
 					println("\nCannot accept hall-orders, elevator offline")
 					continue
-					//Don't accept hall orders if offline
 				}
 			}
 
 		//Control recieves an updated elevatorlist from the Syncronizer
 		case tempElevList := <-SyncToControlChannel:
-			println("Control recieved updated elevatorlist from sync")
 
 			for elev := 0; elev < NumElevators; elev++ {
 				if elev != myID {
@@ -251,7 +188,7 @@ func ControlRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 		//Control recieves an update from the local fsm
 		case updatedElevator := <-fsmUpdateChannel:
 
-			tempQ := elevatorList[myID].Queue //preserve the queue
+			tempQ := elevatorList[myID].Queue
 			elevatorList[myID] = updatedElevator
 			elevatorList[myID].Queue = tempQ
 

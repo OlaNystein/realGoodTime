@@ -4,13 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"time"
-
-	//"time"
-
-	// "../network/bcast"
 	"../network/peers"
-	// "../network/localip"
-	// "../network/conn"
 	. "../Config"
 )
 
@@ -37,7 +31,9 @@ func checkOnlineElevators(onlineElevators [NumElevators]bool) int {
 	return onlinecount
 }
 
-func ConnectedElevatorsRoutine(PeerUpdateChannel <-chan peers.PeerUpdate, OnlineElevChannel chan<- [NumElevators]bool, reassignChannel chan<- int, timedOutChannel chan<- bool) {
+func ConnectedElevatorsRoutine(PeerUpdateChannel <-chan peers.PeerUpdate,
+	OnlineElevChannel chan<- [NumElevators]bool,
+	reassignChannel chan<- int, timedOutChannel chan<- bool) {
 
 	var (
 		onlineElevators [NumElevators]bool
@@ -97,6 +93,7 @@ func SynchronizerRoutine(myID int, PeerUpdateChannel <-chan peers.PeerUpdate,
 		timeOut         bool = false
 	)
 
+	//Subroutine to update online elevator list
 	go func() {
 		for {
 			select {
@@ -196,23 +193,19 @@ func SynchronizerRoutine(myID int, PeerUpdateChannel <-chan peers.PeerUpdate,
 		case msg := <-IncomingMessageChannel:
 
 			if msg.ElevList != elevatorList {
-				println("\nUPDATED ELEVATORLIST")
 				tempElevator := elevatorList[myID]
 				elevatorList = msg.ElevList
 				elevatorList[myID] = tempElevator
 				update = true
 			}
 			if msg.NewOrder.ID == myID && msg.ID != myID {
-				println("UPDATED ORDER AT SELF")
 				elevatorList[myID].Queue[msg.NewOrder.Floor][msg.NewOrder.Button] = true
 				update = true
 			}
 		}
 		if update {
-			println("Updating from sync to control")
 			update = false
 			go func() { SyncToControlChannel <- elevatorList }()
-			println("Control updated from sync")
 		}
 	}
 }
