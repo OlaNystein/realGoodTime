@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 	. "./Config"
-	control "./Control"
+	order "./order"
 	synchronize "./Synchronize"
 	"./elevio"
 	"./fsm"
@@ -94,9 +94,9 @@ func main() {
 	go fsm.FsmRoutine(intID, sensorChannel, OrderToFSMChannel, fsmUpdateChannel,
 						fsmOrderCompleteChannel, reassignChannel, motorStoppedChannel)
 
-	go control.SetOrderLightsRoutine(UpdateLightsChannel, intID)
+	go order.SetOrderLightsRoutine(UpdateLightsChannel, intID)
 
-	go control.ControlRoutine(intID, ControlToSyncChannel, SyncToControlChannel, OrderToFSMChannel,
+	go order.OrderRoutine(intID, ControlToSyncChannel, SyncToControlChannel, OrderToFSMChannel,
 								newOrderChannel, fsmUpdateChannel, UpdateLightsChannel,
 								OnlineElevSyncChannel, fsmOrderCompleteChannel, syncOrderCompleteChannel,
 								reassignChannel, OnlineElevControlChannel, motorStoppedChannel)

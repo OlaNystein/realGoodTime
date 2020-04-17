@@ -1,4 +1,4 @@
-package control
+package order
 
 import (
 	. "../Config"
@@ -99,7 +99,7 @@ func SetOrderLightsRoutine(updateLightChannel <-chan [NumElevators]Elev, myID in
 	}
 }
 
-func ControlRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
+func OrderRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 	SyncToControlChannel <-chan [NumElevators]Elev,
 	OrderToFSMChannel chan<- Elev, newOrderChannel <-chan ButtonEvent,
 	fsmUpdateChannel <-chan Elev, updateLightChannel chan<- [NumElevators]Elev,
@@ -120,7 +120,7 @@ func ControlRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 		for {
 			select {
 			case OnlineListUpdate := <-OnlineElevChannelControl:
-				println("ONLINE ELEVATORS UPDATED IN CONTROL!")
+				println("ONLINE ELEVATORS UPDATED IN ORDER!")
 				onlineElevators = OnlineListUpdate
 				println(onlineElevators[0], " ", onlineElevators[1], " ", onlineElevators[2], "\n")
 				online = onlineElevators[myID]
