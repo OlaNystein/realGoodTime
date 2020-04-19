@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"strconv"
 	"time"
-	"../network/peers"
+
 	. "../Config"
+	"../network/peers"
 )
 
 func syncClearNonLocalOrders(elevatorList [NumElevators]Elev, myID int) [NumElevators]Elev {
@@ -76,12 +77,12 @@ func ConnectedElevatorsRoutine(PeerUpdateChannel <-chan peers.PeerUpdate,
 
 func SynchronizerRoutine(myID int, PeerUpdateChannel <-chan peers.PeerUpdate,
 	PeerTxEnable chan<- bool,
-	ControlToSyncChannel <-chan [NumElevators]Elev,
-	SyncToControlChannel chan<- [NumElevators]Elev,
+	OrderToSyncChannel <-chan [NumElevators]Elev,
+	SyncToOrderChannel chan<- [NumElevators]Elev,
 	IncomingMessageChannel <-chan Message,
 	OutgoingMessageChannel chan<- Message,
 	OnlineElevChannel <-chan [NumElevators]bool,
-	OnlineElevChannelControl chan<- [NumElevators]bool,
+	OnlineElevChannelOrder chan<- [NumElevators]bool,
 	SyncOrderChannel <-chan Order,
 	timedOutChannel <-chan bool) {
 
@@ -116,7 +117,7 @@ func SynchronizerRoutine(myID int, PeerUpdateChannel <-chan peers.PeerUpdate,
 						}
 					}()
 				}
-				go func() { OnlineElevChannelControl <- onlineElevators }()
+				go func() { OnlineElevChannelOrder <- onlineElevators }()
 			case timeOut = <-timedOutChannel:
 
 				if timeOut {
@@ -136,7 +137,7 @@ func SynchronizerRoutine(myID int, PeerUpdateChannel <-chan peers.PeerUpdate,
 		println("Current length of online elevators: ", checkOnlineElevators(onlineElevators))
 		if checkOnlineElevators(onlineElevators) > 1 {
 			elevatorList = initMsg.ElevList
-			go func() { SyncToControlChannel <- elevatorList }()
+			go func() { SyncToOrderChannel <- elevatorList }()
 		}
 	case <-initTimer.C:
 		println("Warning: Not able to initialize peer elevatorlist")
@@ -146,14 +147,14 @@ func SynchronizerRoutine(myID int, PeerUpdateChannel <-chan peers.PeerUpdate,
 		select {
 
 		//Records update to local elevator
-		case ctrlUpdate := <-ControlToSyncChannel:
+		case ctrlUpdate := <-OrderToSyncChannel:
 
 			tempQ := elevatorList[myID].Queue
 			elevatorList[myID] = ctrlUpdate[myID]
 			elevatorList[myID].Queue = tempQ
 			update = true
 
-		//Distributes an order recorded in control
+		//Distributes an order recorded in Order
 		case order := <-SyncOrderChannel:
 			if order.ID == myID {
 				if order.Complete {
@@ -173,8 +174,7 @@ func SynchronizerRoutine(myID int, PeerUpdateChannel <-chan peers.PeerUpdate,
 					println("Order registered for elevator ", order.ID)
 					elevatorList[order.ID].Queue[order.Floor][order.Button] = true
 				} else {
-					println("ERROR: Could not assign order to offline-elevator", order.ID)
-					println(onlineElevators[0], " ", onlineElevators[1], " ", onlineElevators[2], "\n")
+					println("ERROR: Could not assign order to offline-elevator ", order.ID)
 				}
 			}
 			outgoingPackage.NewOrder = order
@@ -182,12 +182,12 @@ func SynchronizerRoutine(myID int, PeerUpdateChannel <-chan peers.PeerUpdate,
 			outgoingPackage.ElevList = elevatorList
 			go func() {
 				if !timeOut {
-					for i := 0; i < 3; i++ {
+					for i := 0; i < 5; i++ {
 						OutgoingMessageChannel <- outgoingPackage
 					}
 				}
 			}()
-			go func() { SyncToControlChannel <- elevatorList }()
+			go func() { SyncToOrderChannel <- elevatorList }()
 
 		//Recieves an update from one of the other elevators
 		case msg := <-IncomingMessageChannel:
@@ -205,7 +205,7 @@ func SynchronizerRoutine(myID int, PeerUpdateChannel <-chan peers.PeerUpdate,
 		}
 		if update {
 			update = false
-			go func() { SyncToControlChannel <- elevatorList }()
+			go func() { SyncToOrderChannel <- elevatorList }()
 		}
 	}
 }

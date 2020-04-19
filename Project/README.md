@@ -16,6 +16,12 @@ Model assumptions
 -----------------
 During implementation, we were also allowed to make certain assumptions. The most prevalent ones being that only one error would occur at a time and that one elevator would always work as expected. Again, reference [`the problem description`](https://github.com/TTK4145/Project/blob/master/README.md) for the full list of assumptions. 
 
+Code that we did not author
+---------------------------
+For this project, we've used a bit of code we ourselves did not write. Most notable are the two modules `network` and `elevio`, which were supplied to all students of the course. We'va also used common libraries of the GO-programming language, namely `fmt`, `time`, `net`, `sync`, `flag`, and `strconv`. All credit for logic included in these libraries and modules go to their respective authors. 
+
+The rest of the code is written solely by ourselves, with the help of various teaching assistants. 
+
 Design and performance
 ----------------------
 As stated above, our implementation was of a `peer-to-peer` network using message-passing and UDP-broadcasts. We chose to do it this way for a few reasons. Mainly, we found peer-to-peer easier to handle than a master-slave system, which we initially opted for when designing the software. If every elevator knew everything about every other elevator at all times, handling loss of connection, reconnecting and delegation of orders became significantly easier. All one needed to do was let each elevator designate the orders it received to one of the peers, reassign the orders of a lost elevator to the others and update elevators that entered the network with their previous orders or the state of all connected elevators. This was done quite easily by letting each elevator update a large local list with the orders, states, directions and floors of all peers. When a change occurred at an elevator it broadcasts this list to the other elevators, prompting them to update their own. This resulted in a lot of information being passed over the network, but it worked very well. 
@@ -26,3 +32,6 @@ Overall, the final implementation worked out great! The elevators worked well to
 
 How to run the software
 -----------------------
+To test the software on simulators, do the following: 
+- **Start simulators:** To simulate `n` elevators, start by opening `n` terminals. In each of these, call `./SimElevatorServer --port=[PORT]` and note the port used.
+- **Start elevator-software:** To start the elevators, open `n` more terminals and call `go run main.go -id=[ID] -port=[PORT]`. Note that the ID should increment, starting from 0, and that the port of the software should match that of one of the simulators. 

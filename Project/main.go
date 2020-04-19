@@ -4,13 +4,14 @@ import (
 	"flag"
 	"strconv"
 	"time"
+
 	. "./Config"
-	order "./order"
 	synchronize "./Synchronize"
 	"./elevio"
 	"./fsm"
 	"./network/bcast"
 	"./network/peers"
+	order "./order"
 )
 
 func main() {
@@ -42,42 +43,38 @@ func main() {
 	//Light channel
 	UpdateLightsChannel := make(chan [NumElevators]Elev)
 
-	//****fsm-control channels****
+	//****fsm-Order channels****
 
-		//from fsm
-		fsmUpdateChannel := make(chan Elev)
-		fsmOrderCompleteChannel := make(chan Order)
-		motorStoppedChannel := make(chan bool)
+	//from fsm
+	fsmUpdateChannel := make(chan Elev)
+	fsmOrderCompleteChannel := make(chan Order)
+	motorStoppedChannel := make(chan bool)
 
-		//from control
-		OrderToFSMChannel := make(chan Elev)
+	//from Order
+	OrderToFSMChannel := make(chan Elev)
 
-	//****control-sync channels****
+	//****Order-sync channels****
 
-		//from control
-		ControlToSyncChannel := make(chan [NumElevators]Elev)
-		syncOrderCompleteChannel := make(chan Order)
+	//from Order
+	OrderToSyncChannel := make(chan [NumElevators]Elev)
+	syncOrderCompleteChannel := make(chan Order)
 
-		//from sync
-		SyncToControlChannel := make(chan [NumElevators]Elev)
-		OnlineElevControlChannel := make(chan [NumElevators]bool)
-		reassignChannel := make(chan int)
-		timedOutChannel := make(chan bool)
+	//from sync
+	SyncToOrderChannel := make(chan [NumElevators]Elev)
+	OnlineElevOrderChannel := make(chan [NumElevators]bool)
+	reassignChannel := make(chan int)
+	timedOutChannel := make(chan bool)
 
 	//****sync-network channels****
 
-		//from sync
-		PeerTxEnable := make(chan bool)
-		OutMsg := make(chan Message)
+	//from sync
+	PeerTxEnable := make(chan bool)
+	OutMsg := make(chan Message)
 
-		//from network
-		OnlineElevSyncChannel := make(chan [NumElevators]bool)
-		PeerUpdateChannel := make(chan peers.PeerUpdate)
-		InMsg := make(chan Message)
-
-
-
-
+	//from network
+	OnlineElevSyncChannel := make(chan [NumElevators]bool)
+	PeerUpdateChannel := make(chan peers.PeerUpdate)
+	InMsg := make(chan Message)
 
 	//communication routines
 	go peers.Transmitter(42035, ID, PeerTxEnable)
@@ -92,18 +89,18 @@ func main() {
 
 	//modules
 	go fsm.FsmRoutine(intID, sensorChannel, OrderToFSMChannel, fsmUpdateChannel,
-						fsmOrderCompleteChannel, reassignChannel, motorStoppedChannel)
+		fsmOrderCompleteChannel, reassignChannel, motorStoppedChannel)
 
 	go order.SetOrderLightsRoutine(UpdateLightsChannel, intID)
 
-	go order.OrderRoutine(intID, ControlToSyncChannel, SyncToControlChannel, OrderToFSMChannel,
-								newOrderChannel, fsmUpdateChannel, UpdateLightsChannel,
-								OnlineElevSyncChannel, fsmOrderCompleteChannel, syncOrderCompleteChannel,
-								reassignChannel, OnlineElevControlChannel, motorStoppedChannel)
+	go order.OrderRoutine(intID, OrderToSyncChannel, SyncToOrderChannel, OrderToFSMChannel,
+		newOrderChannel, fsmUpdateChannel, UpdateLightsChannel,
+		OnlineElevSyncChannel, fsmOrderCompleteChannel, syncOrderCompleteChannel,
+		reassignChannel, OnlineElevOrderChannel, motorStoppedChannel)
 
-	go synchronize.SynchronizerRoutine(intID, PeerUpdateChannel, PeerTxEnable, ControlToSyncChannel,
-										SyncToControlChannel, InMsg, OutMsg, OnlineElevSyncChannel,
-										OnlineElevControlChannel, syncOrderCompleteChannel, timedOutChannel)
+	go synchronize.SynchronizerRoutine(intID, PeerUpdateChannel, PeerTxEnable, OrderToSyncChannel,
+		SyncToOrderChannel, InMsg, OutMsg, OnlineElevSyncChannel,
+		OnlineElevOrderChannel, syncOrderCompleteChannel, timedOutChannel)
 
 	for {
 		time.Sleep(time.Second)

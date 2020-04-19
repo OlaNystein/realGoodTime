@@ -89,13 +89,13 @@ func SetOrderLightsRoutine(updateLightChannel <-chan [NumElevators]Elev, myID in
 	}
 }
 
-func OrderRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
-	SyncToControlChannel <-chan [NumElevators]Elev,
+func OrderRoutine(myID int, OrderToSyncChannel chan<- [NumElevators]Elev,
+	SyncToOrderChannel <-chan [NumElevators]Elev,
 	OrderToFSMChannel chan<- Elev, newOrderChannel <-chan ButtonEvent,
 	fsmUpdateChannel <-chan Elev, updateLightChannel chan<- [NumElevators]Elev,
 	OnlineElevChannel <-chan [NumElevators]bool, FSMCompleteOrderChannel <-chan Order,
 	SyncOrderChannel chan<- Order, reassignChannel <-chan int,
-	OnlineElevChannelControl <-chan [NumElevators]bool, motorStoppedChannel <-chan bool) {
+	OnlineElevChannelOrder <-chan [NumElevators]bool, motorStoppedChannel <-chan bool) {
 
 	var (
 		elevatorList    [NumElevators]Elev
@@ -109,7 +109,7 @@ func OrderRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 	go func() {
 		for {
 			select {
-			case OnlineListUpdate := <-OnlineElevChannelControl:
+			case OnlineListUpdate := <-OnlineElevChannelOrder:
 				println("ONLINE ELEVATORS UPDATED IN ORDER!")
 				onlineElevators = OnlineListUpdate
 				println(onlineElevators[0], " ", onlineElevators[1], " ", onlineElevators[2], "\n")
@@ -122,7 +122,7 @@ func OrderRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 
 	for {
 		select {
-		//Control receieves a new order from the hardware
+		//Order receieves a new order from the hardware
 		case newOrder := <-newOrderChannel:
 			println("\nRecieved new order for button ", newOrder.Button, " at floor ", newOrder.Floor)
 
@@ -161,8 +161,8 @@ func OrderRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 				}
 			}
 
-		//Control recieves an updated elevatorlist from the Syncronizer
-		case tempElevList := <-SyncToControlChannel:
+		//Order recieves an updated elevatorlist from the Syncronizer
+		case tempElevList := <-SyncToOrderChannel:
 
 			for elev := 0; elev < NumElevators; elev++ {
 				if elev != myID {
@@ -175,14 +175,14 @@ func OrderRoutine(myID int, ControlToSyncChannel chan<- [NumElevators]Elev,
 
 			go func() { OrderToFSMChannel <- elevatorList[myID] }()
 
-		//Control recieves an update from the local fsm
+		//Order recieves an update from the local fsm
 		case updatedElevator := <-fsmUpdateChannel:
 
 			tempQ := elevatorList[myID].Queue
 			elevatorList[myID] = updatedElevator
 			elevatorList[myID].Queue = tempQ
 
-			go func() { ControlToSyncChannel <- elevatorList }()
+			go func() { OrderToSyncChannel <- elevatorList }()
 
 		case finished := <-FSMCompleteOrderChannel:
 			println("\nOrder Finished!")
