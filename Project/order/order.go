@@ -5,15 +5,6 @@ import (
 	"../elevio"
 )
 
-func printLocalOrders(elevatorList [NumElevators]Elev, myID int) {
-	println("\nCURRENT LOCAL QUEUE:")
-	println("Floor 4: BT_UP = ", elevatorList[myID].Queue[3][BT_HallUp], ", BT_DOWN = ", elevatorList[myID].Queue[3][BT_HallDown], ", BT_Cab = ", elevatorList[myID].Queue[3][BT_Cab])
-	println("Floor 3: BT_UP = ", elevatorList[myID].Queue[2][BT_HallUp], ", BT_DOWN = ", elevatorList[myID].Queue[2][BT_HallDown], ", BT_Cab = ", elevatorList[myID].Queue[2][BT_Cab])
-	println("Floor 2: BT_UP = ", elevatorList[myID].Queue[1][BT_HallUp], ", BT_DOWN = ", elevatorList[myID].Queue[1][BT_HallDown], ", BT_Cab = ", elevatorList[myID].Queue[1][BT_Cab])
-	println("Floor 1: BT_UP = ", elevatorList[myID].Queue[0][BT_HallUp], ", BT_DOWN = ", elevatorList[myID].Queue[0][BT_HallDown], ", BT_Cab = ", elevatorList[myID].Queue[0][BT_Cab])
-
-}
-
 func orderAlreadyRecorded(elevList [NumElevators]Elev, order ButtonEvent) bool {
 	floor := order.Floor
 	btn := order.Button
@@ -70,7 +61,6 @@ func calculateCost(myID int, lostID int, elevList [NumElevators]Elev, newOrder B
 	return theChosenOne
 
 }
-
 
 func SetOrderLightsRoutine(updateLightChannel <-chan [NumElevators]Elev, myID int) {
 	for {

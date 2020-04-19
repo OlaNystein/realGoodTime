@@ -1,5 +1,5 @@
-TTK4145 - Real Time Programming, elevator project hand-in for group 44
-=====================================================================
+TTK4145 - Real Time Programming, elevator project
+=================================================
 The goal of this project was to design a system for `n` elevators to work in parallel over `m` floors using a selection of techniques to support the chosen language and strategy of implementation. Our group decided on using the ever more popular language `Google GO` , which bases itself on message passing between internal processes instead of synchronizing a set of shared variables. We also decided on our elevators working in a 'peer-to-peer' fashion, meaning that every elevator have information about the current state, direction and floor of all the peers on the network and can distribute orders freely. When an elevator then receives an order, it calculates which elevator is best to handle the given order and informs the other over a `UDP broadcast`. 
 
 In this repository one can find our software for solving the described problem. `main.go` runs the software for a single elevator using the routines specified in other modules, who are located in their own respective folders. For detailed information about said modules and their routines, reference the `README` files of each such folder. This README file will contain the specifications for which we based our implementation upon, as well as a more thorough explanation of our design and the performance of the system. 
@@ -23,3 +23,6 @@ As stated above, our implementation was of a `peer-to-peer` network using messag
 The choice of using UDP connections over TCP was simply a matter of ease. UDP, though more prone to packet-loss than TCP, is both easier to set up and handle on such a local system. By using a simple static redundancy sending for each order, which is not the prettiest method due to the sometimes unnecessary resource-usage on the network, we were then able to establish simple, robust communication between all of the elevators. Finally, the choice of using message passing over shared-variable synchronization was simply related to using the GO programming language. We wished to attempt using it mainly for its surge of popularity in practice and relevancy towards future projects. 
 
 Overall, the final implementation worked out great! The elevators worked well together, and all requirements for functionality, order handling, lights and behavior were met. The amount of information passed between systems is definitely large, but it didn't seem to cause any problems over broadcasts or between processes. 
+
+How to run the software
+-----------------------
