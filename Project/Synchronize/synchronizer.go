@@ -182,7 +182,7 @@ func SynchronizerRoutine(myID int, PeerUpdateChannel <-chan peers.PeerUpdate,
 			outgoingPackage.ElevList = elevatorList
 			go func() {
 				if !timeOut {
-					for i := 0; i < 5; i++ {
+					for i := 0; i < 3; i++ {
 						OutgoingMessageChannel <- outgoingPackage
 					}
 				}
